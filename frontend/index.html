@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hệ thống quản lý trung tâm ngoại ngữ - Language Center Management System">
+    <title>FourGuys - Quản lý Trung tâm Ngoại ngữ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/pages.css">
+    <link rel="stylesheet" href="css/animations.css">
+</head>
+<body>
+    <!-- ===== LOGIN PAGE ===== -->
+    <div id="login-page" class="page active">
+        <div class="login-container">
+            <div class="login-left">
+                <div class="login-brand">
+                    <div class="brand-icon">
+                        <img src="logo.png" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                    </div>
+                    <h1>FourGuys</h1>
+                    <p>Hệ thống quản lý trung tâm ngoại ngữ</p>
+                </div>
+                <div class="login-features">
+                    <div class="feature-item">
+                        <span class="material-icons-outlined">school</span>
+                        <span>Quản lý học viên & giảng viên</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="material-icons-outlined">menu_book</span>
+                        <span>Quản lý khóa học & lớp học</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="material-icons-outlined">payments</span>
+                        <span>Quản lý học phí & thanh toán</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="material-icons-outlined">analytics</span>
+                        <span>Thống kê & báo cáo chi tiết</span>
+                    </div>
+                </div>
+            </div>
+            <div class="login-right">
+            <div class="auth-card" id="login-container">
+                <div class="auth-header">
+                    <div class="logo">
+                        <img src="logo.png" alt="Logo" style="width: 100%; height: 100%; object-fit: contain; max-height: 48px;">
+                        <h2>FourGuys</h2>
+                    </div>
+                    <p>Hệ thống quản lý trung tâm ngoại ngữ</p>
+                </div>
+                <form id="login-form" onsubmit="return handleLogin(event)">
+                    <div id="login-error" class="auth-error hidden"></div>
+                    <div class="form-group">
+                        <label>Tên đăng nhập</label>
+                        <div class="input-with-icon">
+                            <span class="material-icons-outlined">person</span>
+                            <input type="text" id="login-username" placeholder="Nhập tên đăng nhập" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Mật khẩu</label>
+                        <div class="input-with-icon">
+                            <span class="material-icons-outlined">lock</span>
+                            <input type="password" id="login-password" placeholder="Nhập mật khẩu" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full" id="login-btn">
+                        <span>Đăng nhập</span>
+                        <span class="material-icons-outlined">arrow_forward</span>
+                    </button>
+                </form>
+                <div class="auth-footer">
+                    <p>Quên mật khẩu? <a href="javascript:void(0)" onclick="showAdminContact()">Liên hệ quản trị</a></p>
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MAIN APP ===== -->
+    <div id="app-container" class="hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header" onclick="navigate('dashboard')" style="cursor: pointer;">
+                <div class="brand-icon small">
+                    <img src="logo.png" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <span class="sidebar-brand-text">FourGuys</span>
+                <button class="sidebar-toggle" onclick="event.stopPropagation(); toggleSidebar();">
+                    <span class="material-icons-outlined">menu</span>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')" data-roles="admin,staff,teacher,student">
+                    <span class="material-icons-outlined">home</span>
+                    <span class="nav-text">Trang chủ</span>
+                </a>
+                <div class="nav-section">Quản lý</div>
+                <a href="#" class="nav-item" data-page="students" onclick="navigate('students')" data-roles="admin,staff">
+                    <span class="material-icons-outlined">school</span>
+                    <span class="nav-text">Học viên</span>
+                </a>
+                <a href="#" class="nav-item" data-page="teachers" onclick="navigate('teachers')" data-roles="admin,staff">
+                    <span class="material-icons-outlined">person</span>
+                    <span class="nav-text">Giảng viên</span>
+                </a>
+                <a href="#" class="nav-item" data-page="courses" onclick="navigate('courses')" data-roles="admin,staff,teacher,student">
+                    <span class="material-icons-outlined">menu_book</span>
+                    <span class="nav-text">Khóa học</span>
+                </a>
+                <a href="#" class="nav-item" data-page="classes" onclick="navigate('classes')" data-roles="admin,staff,teacher,student">
+                    <span class="material-icons-outlined">class</span>
+                    <span class="nav-text">Lớp học</span>
+                </a>
+                <a href="#" class="nav-item" data-page="schedule" onclick="navigate('schedule')" data-roles="admin,staff,teacher,student">
+                    <span class="material-icons-outlined">calendar_today</span>
+                    <span class="nav-text">Lịch học</span>
+                </a>
+                <div class="nav-section">Nghiệp vụ</div>
+                <a href="#" class="nav-item" data-page="enrollments" onclick="navigate('enrollments')" data-roles="admin,staff">
+                    <span class="material-icons-outlined">how_to_reg</span>
+                    <span class="nav-text">Đăng ký lớp</span>
+                </a>
+                <a href="#" class="nav-item" data-page="payments" onclick="navigate('payments')" data-roles="admin,staff,student">
+                    <span class="material-icons-outlined">payments</span>
+                    <span class="nav-text">Học phí</span>
+                </a>
+                <a href="#" class="nav-item" data-page="attendance" onclick="navigate('attendance')" data-roles="admin,staff,teacher,student">
+                    <span class="material-icons-outlined">fact_check</span>
+                    <span class="nav-text">Điểm danh</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-info" onclick="navigate('profile')">
+                    <div class="user-avatar" id="sidebar-avatar">A</div>
+                    <div class="user-meta">
+                        <div class="user-name" id="sidebar-username">Admin</div>
+                        <div class="user-role" id="sidebar-role">Quản trị viên</div>
+                    </div>
+                </div>
+                <button class="btn-icon" onclick="handleLogout()" title="Đăng xuất">
+                    <span class="material-icons-outlined">logout</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="btn-icon mobile-menu" onclick="toggleSidebar()">
+                        <span class="material-icons-outlined">menu</span>
+                    </button>
+                    <h2 id="page-title">Trang chủ</h2>
+                </div>
+                <div class="topbar-right">
+                    <div class="search-box">
+                        <span class="material-icons-outlined">search</span>
+                        <input type="text" id="global-search" placeholder="Tìm kiếm..." onkeyup="handleGlobalSearch(event)">
+                    </div>
+                    <button class="btn-icon" onclick="handleLogout()" title="Đăng xuất">
+                        <span class="material-icons-outlined">logout</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="content-area" id="content-area">
+                <!-- Dynamic content loaded here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== MODAL ===== -->
+    <div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modal-title">Modal</h3>
+                <button class="btn-icon" onclick="closeModal()">
+                    <span class="material-icons-outlined">close</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modal-body">
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== TOAST ===== -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- ===== CONFIRM DIALOG ===== -->
+    <div id="confirm-overlay" class="modal-overlay hidden">
+        <div class="modal confirm-modal">
+            <div class="modal-header">
+                <h3 id="confirm-title">Xác nhận</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message">Bạn có chắc chắn?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeConfirm(false)">Hủy</button>
+                <button class="btn btn-danger" id="confirm-btn" onclick="closeConfirm(true)">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/students.js"></script>
+    <script src="js/teachers.js"></script>
+    <script src="js/courses.js"></script>
+    <script src="js/classes.js"></script>
+    <script src="js/enrollments.js"></script>
+    <script src="js/payments.js"></script>
+    <script src="js/attendance.js"></script>
+    <script src="js/schedule.js"></script>
+    <script src="js/profile.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
