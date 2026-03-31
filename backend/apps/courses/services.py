@@ -55,33 +55,141 @@ class CourseService:
         return course
 
     @staticmethod
+    def _check_schedule_conflict(class1, class2):
+        """
+        Kiểm tra xem hai lớp học có bị trùng lịch không.
+        Returns True nếu trùng, False nếu không.
+        """
+        # 1. Kiểm tra giao ngày (Date range)
+        if class1.start_date > class2.end_date or class2.start_date > class1.end_date:
+            return False
+            
+        # 2. Kiểm tra giao thứ (Days of week)
+        s1 = (class1.schedule or "").upper()
+        s2 = (class2.schedule or "").upper()
+        
+        days_mapping = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+        common_days = [d for d in days_mapping if d in s1 and d in s2]
+        
+        if not common_days:
+            return False
+            
+        # 3. Kiểm tra giao giờ (Time range)
+        import re
+        time_pattern = r'(\d{1,2}:\d{2})-(\d{1,2}:\d{2})'
+        t1 = re.search(time_pattern, s1)
+        t2 = re.search(time_pattern, s2)
+        
+        if t1 and t2:
+            start1, end1 = t1.groups()
+            start2, end2 = t2.groups()
+            
+            def to_min(t_str):
+                try:
+                    h, m = map(int, t_str.split(':'))
+                    return h * 60 + m
+                except: return 0
+                
+            s1_min, e1_min = to_min(start1), to_min(end1)
+            s2_min, e2_min = to_min(start2), to_min(end2)
+            
+            # Giao nhau nếu (Start1 < End2) AND (Start2 < End1)
+            if s1_min < e2_min and s2_min < e1_min:
+                return True
+                
+        return False
+
+    @staticmethod
     @transaction.atomic
-    def enroll_student(student_id, classroom_id):
-        """Logic nghiệp vụ đăng ký vào lớp: Kiểm tra trùng lặp và giới hạn sĩ số"""
+    def enroll_student(student_id, classroom_id, created_by_user=None):
+        """
+        Đăng ký học viên vào lớp học:
+        - Kiểm tra trùng lịch
+        - Kiểm tra sĩ số
+        - Tạo bản ghi Enrollment & Payment
+        """
+        from apps.payments.models import Payment
+        from datetime import date, timedelta
+
         try:
-            student = Student.objects.get(id=student_id)
-            classroom = ClassRoom.objects.get(id=classroom_id)
+            student = Student.objects.select_related('user').get(id=student_id)
+            classroom = ClassRoom.objects.select_related('course').get(id=classroom_id)
         except (Student.DoesNotExist, ClassRoom.DoesNotExist):
             raise ValidationError("Học viên hoặc Lớp học không hợp lệ.")
 
-        # Kiểm tra trùng lặp
-        if Enrollment.objects.filter(student=student, classroom=classroom).exists():
-            raise ValidationError("Học viên này đã tham gia lớp học rồi.")
+        if classroom.status != 'upcoming':
+            raise ValidationError(f"Chỉ có thể đăng ký lớp 'Sắp khai giảng'. Lớp này đang: {classroom.get_status_display()}")
 
-        # Kiểm tra giới hạn số lượng học viên
+        if Enrollment.objects.filter(student=student, classroom=classroom).exists():
+            raise ValidationError("Học viên đã ở trong lớp này rồi.")
+
+        # Kiểm tra trùng lịch
+        active_enrollments = Enrollment.objects.filter(
+            student=student,
+            status='active',
+            classroom__status__in=['active', 'upcoming']
+        ).select_related('classroom')
+
+        for en in active_enrollments:
+            if CourseService._check_schedule_conflict(classroom, en.classroom):
+                raise ValidationError(
+                    f"Trùng lịch! Học viên đã có lịch học '{en.classroom.schedule}' tại lớp {en.classroom.code}."
+                )
+
         if classroom.current_students >= classroom.max_students:
-            raise ValidationError("Lớp học đã đạt số lượng tối đa học viên.")
+            raise ValidationError("Lớp đã đầy.")
 
         enrollment = Enrollment.objects.create(
             student=student,
             classroom=classroom,
-            status='active'
+            status='active',
+            notes=f"Đăng ký vào ngày {date.today()}"
         )
-        return enrollment
+
+        due_date = min(date.today() + timedelta(days=7), classroom.start_date - timedelta(days=1))
+        
+        payment = Payment.objects.create(
+            student=student,
+            enrollment=enrollment,
+            amount=classroom.course.tuition_fee,
+            discount=0,
+            final_amount=classroom.course.tuition_fee,
+            status='pending',
+            due_date=due_date,
+            created_by=created_by_user,
+            notes=f"Học phí lớp {classroom.code}"
+        )
+
+        # ---- Tự động gửi Email xác nhận ----
+        try:
+            from apps.accounts.utils import send_enrollment_email
+            if student.user.email:
+                send_enrollment_email(student, classroom, payment)
+        except Exception as email_err:
+            print(f"Lỗi gửi email: {str(email_err)}")
+
+        return enrollment, payment
+
+    @staticmethod
+    @transaction.atomic
+    def complete_classroom(classroom_id):
+        """Kết thúc lớp học"""
+        try:
+            classroom = ClassRoom.objects.get(id=classroom_id)
+        except ClassRoom.DoesNotExist:
+            raise ValidationError("Lớp học không tồn tại.")
+
+        if classroom.status != 'active':
+            raise ValidationError("Chỉ có thể kết thúc lớp đang học.")
+
+        classroom.status = 'completed'
+        classroom.save()
+
+        Enrollment.objects.filter(classroom=classroom, status='active').update(status='completed')
+        return classroom
 
     @staticmethod
     def get_active_course_stats():
-        """Thống kê khóa học đang hoạt động"""
         return {
             'total_courses': Course.objects.filter(is_active=True).count(),
             'total_enrollments': Enrollment.objects.filter(status='active').count(),

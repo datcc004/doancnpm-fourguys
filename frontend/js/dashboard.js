@@ -102,6 +102,37 @@ async function renderDashboard() {
                         <span class="material-icons-outlined">fact_check</span>
                         <span>Điểm danh</span>
                     </button>
+                    <button class="quick-action-btn indigo" onclick="navigate('grades')">
+                        <span class="material-icons-outlined">trending_up</span>
+                        <span>Nhập điểm</span>
+                    </button>
+                </div>
+            </div>`;
+        } else {
+            // Thao tác nhanh cho Học viên / Khách
+            html += `<div class="card" style="margin-top:20px;">
+                <div class="card-header"><h3>Lối tắt cho Học viên</h3></div>
+                <div class="quick-actions">
+                    <button class="quick-action-btn blue" onclick="navigate('courses')">
+                        <span class="material-icons-outlined">search</span>
+                        <span>Tìm khóa học</span>
+                    </button>
+                    <button class="quick-action-btn green" onclick="navigate('classes')">
+                        <span class="material-icons-outlined">class</span>
+                        <span>Lớp học của tôi</span>
+                    </button>
+                    <button class="quick-action-btn cyan" onclick="navigate('schedule')">
+                        <span class="material-icons-outlined">calendar_today</span>
+                        <span>Lịch học</span>
+                    </button>
+                    <button class="quick-action-btn pink" onclick="navigate('payments')">
+                        <span class="material-icons-outlined">receipt_long</span>
+                        <span>Học phí</span>
+                    </button>
+                    <button class="quick-action-btn purple" onclick="navigate('grades')">
+                        <span class="material-icons-outlined">grade</span>
+                        <span>Xem kết quả</span>
+                    </button>
                 </div>
             </div>`;
         }
@@ -147,9 +178,13 @@ function renderTopCourses(courses) {
     if (!courses.length) return '<p style="color:var(--text-muted);padding:10px">Chưa có dữ liệu</p>';
 
     return courses.map(c => `
-        <div class="top-course-item">
-            <span class="top-course-name">${c.name}</span>
-            <span class="top-course-count">${c.students} HV</span>
+        <div class="top-course-item" onclick="goToCourse('${c.name.replace(/'/g, "\\'")}')" style="cursor:pointer; transition: background 0.2s; padding: 8px; border-radius: 8px;" onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background='transparent'">
+            <span class="top-course-name" style="color:var(--primary-600); font-weight:600">${c.name}</span>
+            <span class="top-course-count" style="color:var(--text-muted)">${c.students} HV</span>
         </div>
     `).join('');
+}
+
+function goToCourse(name) {
+    navigate('courses', { search: name });
 }

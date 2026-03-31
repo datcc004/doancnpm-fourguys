@@ -111,7 +111,7 @@ class TeacherSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Teacher
-        fields = ['id', 'user', 'teacher_code', 'specialization',
+        fields = ['id', 'user', 'teacher_code', 'specialization', 'languages',
                   'qualification', 'experience_years', 'hourly_rate', 'bio']
         read_only_fields = ['id']
 
@@ -128,6 +128,7 @@ class TeacherCreateSerializer(serializers.Serializer):
     date_of_birth = serializers.DateField(required=False)
     teacher_code = serializers.CharField()
     specialization = serializers.CharField(required=False, allow_blank=True)
+    languages = serializers.CharField(required=False, allow_blank=True)
     qualification = serializers.CharField(required=False, allow_blank=True)
     experience_years = serializers.IntegerField(required=False, default=0)
     hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)

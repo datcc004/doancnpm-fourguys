@@ -33,8 +33,9 @@ function showToast(message, type = 'info', duration = 3000) {
  * Điều hướng trang
  */
 let currentPage = 'dashboard';
-function navigate(page) {
+function navigate(page, params = null) {
     currentPage = page;
+    window.navParams = params;
 
     // Cập nhật active menu
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -51,6 +52,7 @@ function navigate(page) {
         enrollments: 'Đăng ký Lớp học',
         payments: 'Quản lý Học phí',
         attendance: 'Điểm danh',
+        grades: 'Kết quả học tập',
         schedule: 'Lịch học & Thời khóa biểu',
         profile: 'Thông tin cá nhân',
     };
@@ -66,14 +68,15 @@ function navigate(page) {
     // Gọi hàm render tương ứng
     setTimeout(() => {
         switch (page) {
-            case 'dashboard': renderDashboard(); break;
-            case 'students': renderStudents(); break;
-            case 'teachers': renderTeachers(); break;
-            case 'courses': renderCourses(); break;
-            case 'classes': renderClasses(); break;
-            case 'enrollments': renderEnrollments(); break;
-            case 'payments': renderPayments(); break;
-            case 'attendance': renderAttendance(); break;
+            case 'dashboard': renderDashboard(window.navParams); break;
+            case 'students': renderStudents(window.navParams); break;
+            case 'teachers': renderTeachers(window.navParams); break;
+            case 'courses': renderCourses(window.navParams); break;
+            case 'classes': renderClasses(window.navParams); break;
+            case 'enrollments': renderEnrollments(window.navParams); break;
+            case 'payments': renderPayments(window.navParams); break;
+            case 'attendance': renderAttendance(window.navParams); break;
+            case 'grades': renderGrades(window.navParams); break;
             case 'schedule': 
                 currentScheduleOffset = 0; // Reset về tuần hiện tại khi bấm menu
                 renderSchedule(); 
@@ -106,11 +109,28 @@ function openModal(title, bodyHtml) {
 /**
  * Đóng modal
  */
-function closeModal(event) {
-    if (event && event.target !== event.currentTarget) return;
+function closeModal() {
     document.getElementById('modal-overlay').classList.add('hidden');
     document.body.style.overflow = '';
 }
+
+// Khởi tạo xử lý đóng modal thông minh (tránh bôi đen văn bản làm đóng modal)
+document.addEventListener('DOMContentLoaded', () => {
+    const overlay = document.getElementById('modal-overlay');
+    if (!overlay) return;
+
+    let mousedownOnOverlay = false;
+    overlay.addEventListener('mousedown', (e) => {
+        mousedownOnOverlay = (e.target === overlay);
+    });
+
+    overlay.addEventListener('mouseup', (e) => {
+        if (mousedownOnOverlay && e.target === overlay) {
+            closeModal();
+        }
+        mousedownOnOverlay = false;
+    });
+});
 
 /**
  * Confirm dialog
@@ -120,7 +140,7 @@ function showConfirm(title, message) {
     return new Promise(resolve => {
         confirmResolve = resolve;
         document.getElementById('confirm-title').textContent = title;
-        document.getElementById('confirm-message').textContent = message;
+        document.getElementById('confirm-message').innerHTML = message;
         document.getElementById('confirm-overlay').classList.remove('hidden');
     });
 }

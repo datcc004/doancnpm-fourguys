@@ -39,7 +39,10 @@ const API = {
                 throw new Error('Phiên đăng nhập đã hết hạn');
             }
 
-            const data = await response.json();
+            let data = {};
+            if (response.status !== 204) {
+                data = await response.json();
+            }
 
             if (!response.ok) {
                 throw { status: response.status, data };

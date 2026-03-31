@@ -27,11 +27,11 @@ async function renderTeachers() {
                             <th>Mã GV</th>
                             <th>Họ tên</th>
                             <th>Email</th>
+                            <th>Ngôn ngữ</th>
                             <th>Chuyên môn</th>
                             <th>Bằng cấp</th>
                             <th>Kinh nghiệm</th>
-                            <th>Lương/giờ</th>
-                            <th>Thao tác</th>
+                            <th style="text-align:right">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody id="teachers-table-body">
@@ -63,19 +63,15 @@ async function loadTeachers(page = 1) {
             <tr>
                 <td><strong>${t.teacher_code}</strong></td>
                 <td>${t.user.last_name} ${t.user.first_name}</td>
-                <td>${t.user.email || '-'}</td>
+                <td><div style="font-size:0.85rem">${t.user.email || '-'}</div></td>
+                <td><span class="badge badge-info">${t.languages || '-'}</span></td>
                 <td><span class="badge badge-primary">${t.specialization || '-'}</span></td>
-                <td>${t.qualification || '-'}</td>
+                <td><div style="font-size:0.85rem">${t.qualification || '-'}</div></td>
                 <td>${t.experience_years} năm</td>
-                <td>${formatCurrency(t.hourly_rate)}</td>
-                <td>
-                    <div class="btn-group">
-                        <button class="btn btn-sm btn-secondary" onclick="editTeacher(${t.id})" title="Sửa">
-                            <span class="material-icons-outlined" style="font-size:1rem">edit</span>
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteTeacher(${t.id})" title="Xóa">
-                            <span class="material-icons-outlined" style="font-size:1rem">delete</span>
-                        </button>
+                <td style="text-align:right">
+                    <div class="action-btn-group">
+                        <button class="btn-action edit" onclick="editTeacher(${t.id})" title="Sửa"><span class="material-icons-outlined">edit</span></button>
+                        <button class="btn-action danger" onclick="deleteTeacher(${t.id})" title="Xóa"><span class="material-icons-outlined">delete</span></button>
                     </div>
                 </td>
             </tr>
@@ -107,8 +103,14 @@ function openTeacherModal(teacher = null) {
                     <input type="text" name="teacher_code" value="${isEdit ? teacher.teacher_code : ''}" required ${isEdit ? 'readonly' : ''}>
                 </div>
                 <div class="form-group">
+                    <label>Ngôn ngữ giảng dạy</label>
+                    <input type="text" name="languages" value="${isEdit ? (teacher.languages || '') : ''}" placeholder="VD: Tiếng Anh, Tiếng Nhật...">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="width: 100%;">
                     <label>Chuyên môn</label>
-                    <input type="text" name="specialization" value="${isEdit ? (teacher.specialization || '') : ''}" placeholder="VD: IELTS, TOEIC...">
+                    <input type="text" name="specialization" value="${isEdit ? (teacher.specialization || '') : ''}" placeholder="VD: IELTS, TOEIC, Giao tiếp...">
                 </div>
             </div>
             <div class="form-row">
@@ -204,7 +206,19 @@ async function saveTeacher(event, id) {
         closeModal();
         loadTeachers();
     } catch (error) {
-        const msg = error.data ? JSON.stringify(error.data) : 'Có lỗi xảy ra';
+        console.error('Save Teacher Error:', error);
+        let msg = 'Có lỗi xảy ra khi lưu dữ liệu';
+        if (error.data) {
+            if (typeof error.data === 'string') msg = error.data;
+            else if (error.data.error) msg = error.data.error;
+            else if (typeof error.data === 'object') {
+                const fieldErrors = Object.values(error.data);
+                if (fieldErrors.length > 0) {
+                    const firstError = fieldErrors[0];
+                    msg = Array.isArray(firstError) ? firstError[0] : firstError;
+                }
+            }
+        }
         showToast(msg, 'error');
     }
     return false;

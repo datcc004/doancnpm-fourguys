@@ -6,7 +6,16 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from django.http import JsonResponse
+
+def api_root_view(request):
+    return JsonResponse({
+        "status": "success",
+        "message": "Language Center API is running successfully. Please use /api/ for endpoints."
+    })
+
 urlpatterns = [
+    path('', api_root_view, name='api-root'),
     path('admin/', admin.site.urls),
     # API Routes
     path('api/auth/', include('apps.accounts.urls')),

@@ -10,24 +10,36 @@ class CourseSerializer(serializers.ModelSerializer):
     """Serializer cho Course"""
     total_classes = serializers.SerializerMethodField()
     total_students = serializers.SerializerMethodField()
+    is_enrolled = serializers.SerializerMethodField()
+    is_studying = serializers.SerializerMethodField()
+    classrooms = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = ['id', 'name', 'code', 'language', 'level', 'description',
-                  'duration_weeks', 'total_hours', 'tuition_fee', 'max_students',
-                  'is_active', 'total_classes', 'total_students', 'created_at', 'updated_at']
+                  'total_lessons', 'tuition_fee', 'max_students',
+                  'is_active', 'total_classes', 'total_students', 'is_enrolled', 'is_studying', 'classrooms', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def get_classrooms(self, obj):
+        # ClassRoomSerializer được định nghĩa ở dưới, nhưng python resolve name lúc runtime nên vẫn gọi được
+        return ClassRoomSerializer(obj.classrooms.all(), many=True, context=self.context).data
+
     def validate_code(self, value):
-        """Kiểm tra mã khóa học: hoa, không trùng, regex [A-Z]{2,5}[0-9]{2,4}"""
+        """Kiểm tra mã khóa học: hoa, không trùng"""
         import re
         value = value.upper()
-        if not re.match(r'^[A-Z]{2,5}[0-9]{2,4}$', value):
-            raise serializers.ValidationError("Mã khóa học không hợp lệ (Ví dụ: ENG101, JP202).")
+        
+        # Nếu đang sửa và mã không thay đổi → bỏ qua kiểm tra format
+        if self.instance and self.instance.code == value:
+            return value
+        
+        # Cho phép format linh hoạt: chữ, số, dấu gạch ngang
+        if not re.match(r'^[A-Z0-9][A-Z0-9\-]{1,19}$', value):
+            raise serializers.ValidationError("Mã khóa học không hợp lệ (chỉ dùng chữ IN HOA, số và dấu gạch ngang).")
         
         if Course.objects.filter(code=value).exists():
-            if not self.instance or self.instance.code != value:
-                raise serializers.ValidationError("Mã khóa học này đã tồn tại.")
+            raise serializers.ValidationError("Mã khóa học này đã tồn tại.")
         return value
 
     def validate_tuition_fee(self, value):
@@ -54,7 +66,34 @@ class CourseSerializer(serializers.ModelSerializer):
         return obj.classrooms.count()
 
     def get_total_students(self, obj):
-        return Enrollment.objects.filter(classroom__course=obj, status='active').count()
+        return Enrollment.objects.filter(course=obj, status='active').count()
+
+    def get_is_enrolled(self, obj):
+        """Kiểm tra xem học viên hiện tại đã đăng ký khóa này chưa (bao gồm cả việc đã được xếp lớp)"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.role == 'student':
+            if hasattr(request.user, 'student_profile'):
+                from django.db.models import Q
+                return Enrollment.objects.filter(
+                    student=request.user.student_profile
+                ).filter(
+                    Q(course=obj) | Q(classroom__course=obj)
+                ).exists()
+        return False
+
+    def get_is_studying(self, obj):
+        """Kiểm tra xem học viên này đã chính thức có lớp trong khóa học hay chưa"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.role == 'student':
+            if hasattr(request.user, 'student_profile'):
+                from django.db.models import Q
+                return Enrollment.objects.filter(
+                    student=request.user.student_profile,
+                    classroom__isnull=False
+                ).filter(
+                    Q(course=obj) | Q(classroom__course=obj)
+                ).exists()
+        return False
 
 
 class ClassRoomSerializer(serializers.ModelSerializer):
@@ -63,19 +102,120 @@ class ClassRoomSerializer(serializers.ModelSerializer):
     teacher_name = serializers.SerializerMethodField()
     current_students = serializers.ReadOnlyField()
     is_full = serializers.ReadOnlyField()
+    is_enrolled = serializers.SerializerMethodField()
 
     class Meta:
         model = ClassRoom
         fields = ['id', 'name', 'code', 'course', 'course_name', 'teacher', 'teacher_name',
-                  'room', 'schedule', 'learning_mode', 'start_date', 'end_date', 'start_time', 'end_time',
-                  'status', 'max_students', 'current_students', 'is_full', 'notes', 'created_at']
+                  'room', 'schedule', 'total_lessons', 'learning_mode', 'start_date', 'end_date', 'start_time', 'end_time',
+                  'status', 'max_students', 'current_students', 'is_full', 'is_enrolled', 'notes', 'created_at']
         read_only_fields = ['id', 'created_at']
 
+    def get_is_enrolled(self, obj):
+        """Kiểm tra xem user hiện tại (nếu là học viên) đã đăng ký lớp này chưa"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.role == 'student':
+            if hasattr(request.user, 'student_profile'):
+                return Enrollment.objects.filter(student=request.user.student_profile, classroom=obj).exists()
+        return False
+
     def validate(self, data):
-        """Kiểm tra logic ngày bắt đầu/kết thúc"""
-        if data.get('start_date') and data.get('end_date'):
-            if data['start_date'] > data['end_date']:
-                raise serializers.ValidationError("Ngày bắt đầu không thể sau ngày kết thúc.")
+        """
+        Kiểm tra logic nghiệp vụ cho lớp học:
+        1. Ngày bắt đầu/kết thúc.
+        2. Chuyên môn giảng viên (Teacher Qualification).
+        3. Trùng lịch giảng viên (Teacher Schedule Conflict).
+        """
+        from .services import CourseService
+        from apps.accounts.models import Teacher
+        
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        teacher = data.get('teacher')
+        course = data.get('course')
+        schedule = data.get('schedule')
+        
+        # Lấy instance hiện tại nếu đang update
+        instance = self.instance
+        
+        # 1. Kiểm tra ngày
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"end_date": "Ngày bắt đầu không thể sau ngày kết thúc."})
+
+        if teacher and course:
+            # 2. Kiểm tra chuyên môn giảng viên (Teacher Qualification)
+            course_lang_display = dict(course.LANGUAGE_CHOICES).get(course.language, '').lower()
+            teacher_langs = (teacher.languages or '').lower()
+            teacher_spec = (teacher.specialization or '').lower()
+            
+            # Logic: Kiểm tra trong field 'languages' trước, sau đó mới đến 'specialization'
+            is_qualified = False
+            
+            # Kiểm tra trong languages (chính thức)
+            if course_lang_display in teacher_langs or course.language in teacher_langs:
+                is_qualified = True
+            
+            # Nếu chưa thấy, kiểm tra trong specialization (dự phòng)
+            if not is_qualified:
+                english_keywords = ['ielts', 'toeic', 'communication', 'anh', 'english']
+                is_english_course = course.language == 'english' or 'anh' in course_lang_display
+                
+                if course_lang_display in teacher_spec or course.language in teacher_spec:
+                    is_qualified = True
+                elif is_english_course and any(kw in teacher_spec for kw in english_keywords):
+                    is_qualified = True
+                elif 'tất cả' in teacher_spec or 'tất cả' in teacher_langs:
+                    is_qualified = True
+                elif not teacher_spec and not teacher_langs:
+                    is_qualified = True # Fallback cho GV mới chưa cập nhật hồ sơ
+                
+            if not is_qualified:
+                raise serializers.ValidationError({
+                    "teacher": f"Giảng viên {teacher.user.get_full_name()} không có chuyên môn hoặc ngôn ngữ phù hợp với lớp {course_lang_display}."
+                })
+
+            # 3. Kiểm tra trùng lịch giảng viên
+            # Tạo một dummy ClassRoom object để so sánh nếu đang tạo mới
+            from .models import ClassRoom
+            temp_class = instance or ClassRoom(
+                start_date=start_date, end_date=end_date, schedule=schedule
+            )
+            if not instance:
+                temp_class.start_date = start_date
+                temp_class.end_date = end_date
+                temp_class.schedule = schedule
+
+            if teacher:
+                # Tìm các lớp khác mà GV này đang dạy (cùng thời gian)
+                teacher_classes = ClassRoom.objects.filter(
+                    teacher=teacher, 
+                    status__in=['upcoming', 'active']
+                )
+                if instance:
+                    teacher_classes = teacher_classes.exclude(id=instance.id)
+
+                for other in teacher_classes:
+                    if CourseService._check_schedule_conflict(temp_class, other):
+                        raise serializers.ValidationError({
+                            "teacher": f"Giảng viên này đã bị trùng lịch giảng dạy tại lớp '{other.code}' ({other.schedule})."
+                        })
+
+            # 4. Kiểm tra trùng phòng học
+            room = data.get('room')
+            if room:
+                room_classes = ClassRoom.objects.filter(
+                    room=room,
+                    status__in=['upcoming', 'active']
+                )
+                if instance:
+                    room_classes = room_classes.exclude(id=instance.id)
+
+                for other in room_classes:
+                    if CourseService._check_schedule_conflict(temp_class, other):
+                        raise serializers.ValidationError({
+                            "room": f"Phòng {room} đã bị trùng lịch sử dụng bởi lớp '{other.code}' ({other.schedule})."
+                        })
+
         return data
 
     def validate_code(self, value):
@@ -118,29 +258,69 @@ class ClassRoomDetailSerializer(ClassRoomSerializer):
 
 class EnrollmentSerializer(serializers.ModelSerializer):
     """Serializer cho Enrollment"""
+    from apps.accounts.models import Student
+    
+    student = serializers.PrimaryKeyRelatedField(
+        queryset=Student.objects.all(), 
+        required=False, 
+        allow_null=True
+    )
     student_name = serializers.SerializerMethodField()
-    classroom_name = serializers.CharField(source='classroom.name', read_only=True)
-    course_name = serializers.CharField(source='classroom.course.name', read_only=True)
+    classroom_name = serializers.CharField(source='classroom.name', read_only=True, allow_null=True)
+    classroom_code = serializers.CharField(source='classroom.code', read_only=True, allow_null=True)
+    course_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Enrollment
-        fields = ['id', 'student', 'student_name', 'classroom', 'classroom_name',
-                  'course_name', 'enrollment_date', 'status', 'final_grade', 'notes']
-        read_only_fields = ['id', 'enrollment_date']
+        fields = ['id', 'student', 'student_name', 'course', 'course_name', 'classroom', 'classroom_name', 'classroom_code',
+                  'enrollment_date', 'status', 'attendance_grade', 
+                  'midterm_grade', 'final_test_grade', 'final_grade', 'letter_grade', 'gpa4_score', 'notes']
+        read_only_fields = ['id', 'enrollment_date', 'final_grade', 'letter_grade', 'gpa4_score']
 
     def validate(self, data):
-        """Ngăn chặn đăng ký trùng hoặc lớp đầy"""
+        """Ngăn chặn đăng ký trùng khóa học và tự động gán student"""
+        request = self.context.get('request')
         student = data.get('student')
+        
+        # Nếu là học viên tự đăng ký -> Tự động lấy student từ profile
+        if not student and request and request.user.role == 'student':
+            if hasattr(request.user, 'student_profile'):
+                student = request.user.student_profile
+                data['student'] = student
+            else:
+                raise serializers.ValidationError("Tài khoản của bạn chưa có thông tin hồ sơ học viên.")
+
+        if not student:
+            raise serializers.ValidationError({"student": "Vui lòng chọn học viên."})
+
+        course = data.get('course')
         classroom = data.get('classroom')
         
-        if not self.instance: # Chỉ kiểm tra khi tạo mới
-            if Enrollment.objects.filter(student=student, classroom=classroom).exists():
-                raise serializers.ValidationError("Học viên này đã đăng ký lớp học này rồi.")
-            
+        # Nếu đang tạo mới, kiểm tra trùng khóa học
+        if not self.instance:
+            if Enrollment.objects.filter(student=student, course=course).exists():
+                raise serializers.ValidationError("Học viên này đã đăng ký khóa học này rồi.")
+        
+        # Nếu gán lớp, kiểm tra sĩ số lớp đó (trừ khi đang sửa chính bản ghi này)
+        if classroom:
             if classroom.current_students >= classroom.max_students:
-                raise serializers.ValidationError("Lớp học này đã đủ số lượng học viên.")
+                # Nếu là update và bản ghi hiện tại ĐÃ thuộc lớp này thì không báo lỗi
+                if self.instance and self.instance.classroom == classroom:
+                    pass
+                else:
+                    raise serializers.ValidationError("Lớp học này đã đủ số lượng học viên.")
         
         return data
 
+    def get_course_name(self, obj):
+        if obj.course:
+            return obj.course.name
+        if obj.classroom and obj.classroom.course:
+            return obj.classroom.course.name
+        return "-"
+
     def get_student_name(self, obj):
-        return obj.student.user.get_full_name()
+        user = obj.student.user
+        if not user.last_name:
+            return user.first_name
+        return f"{user.last_name} {user.first_name}".strip()

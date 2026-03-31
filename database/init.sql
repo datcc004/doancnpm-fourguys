@@ -8,7 +8,7 @@ CREATE DATABASE IF NOT EXISTS language_center
 
 USE language_center;
 
--- Tạo user cho ứng dụng
+-- Tạo user cho ứng dụng (nếu cần dùng user riêng lẻ)
 CREATE USER IF NOT EXISTS 'lc_user'@'%' IDENTIFIED BY 'lc_password_123';
 GRANT ALL PRIVILEGES ON language_center.* TO 'lc_user'@'%';
 FLUSH PRIVILEGES;

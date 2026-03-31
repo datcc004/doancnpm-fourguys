@@ -1,4 +1,4 @@
-# 🌐 LangCenter - Hệ thống Quản lý Trung tâm Ngoại ngữ
+# 🌐 LangCenter - Hệ thống Quản lý Đào tạo Ngoại ngữ
 
 ## Mô tả dự án
 
@@ -240,6 +240,16 @@ users ─────────┐
                │
                └── attendance_sessions ──── attendance_records (linked to students)
 ```
+
+---
+
+## 🛠️ Phát triển dự án & Làm việc nhóm
+
+Dự án áp dụng quy trình làm việc chuyên nghiệp để đảm bảo tính mở rộng và dễ dàng cộng tác.
+
+- **Git Workflow**: Xem hướng dẫn chi tiết tại [GIT_WORKFLOW.md](./GIT_WORKFLOW.md).
+- **Service Layer Pattern**: Logic nghiệp vụ được tách biệt khỏi Views, nằm trong file `services.py` của từng ứng dụng.
+- **Quy trình Đăng ký & Thanh toán**: Hệ thống tự động tạo yêu cầu thanh toán khi học viên đăng ký lớp học mới.
 
 ---
 

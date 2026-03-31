@@ -24,9 +24,33 @@ class CourseViewSet(viewsets.ModelViewSet):
     filterset_fields = ['language', 'level', 'is_active']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'cancel_enrollment']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    @action(detail=True, methods=['post'])
+    def cancel_enrollment(self, request, pk=None):
+        """Hủy đăng ký khóa học (chỉ dành cho học viên chưa được xếp lớp)"""
+        course = self.get_object()
+        if request.user.role != 'student' or not hasattr(request.user, 'student_profile'):
+            return Response({'error': 'Chỉ học viên mới có thể hủy đăng ký.'}, status=status.HTTP_403_FORBIDDEN)
+            
+        student = request.user.student_profile
+        from django.db.models import Q
+        enrollments = Enrollment.objects.filter(student=student).filter(
+            Q(course=course) | Q(classroom__course=course)
+        )
+        
+        if not enrollments.exists():
+            return Response({'error': 'Bạn chưa đăng ký khóa học này.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Không cho hủy nếu đã được xếp lớp
+        for e in enrollments:
+            if e.classroom is not None:
+                return Response({'error': 'Không thể hủy vì bạn đã được xếp lớp. Vui lòng liên hệ trung tâm.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        enrollments.delete()
+        return Response({'message': 'Đã hủy đăng ký khóa học thành công.'}, status=status.HTTP_200_OK)
 
 
 class ClassRoomViewSet(viewsets.ModelViewSet):
@@ -49,7 +73,12 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def enroll(self, request, pk=None):
-        """Đăng ký học viên vào lớp"""
+        """Đăng ký học viên vào lớp thông qua CourseService"""
+        from .services import CourseService
+        from .serializers import EnrollmentSerializer
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        
         classroom = self.get_object()
         
         # Nếu là học viên tự đăng ký thì lấy ID của chính họ
@@ -62,19 +91,26 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
             student_id = request.data.get('student_id')
 
         if not student_id:
-            return Response({'error': 'Vui lòng chọn hoặc cung cấp student_id'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Vui lòng cung cấp student_id'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if classroom.is_full:
-            return Response({'error': 'Lớp đã đầy'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if Enrollment.objects.filter(student_id=student_id, classroom=classroom).exists():
-            return Response({'error': 'Học viên đã đăng ký lớp này'}, status=status.HTTP_400_BAD_REQUEST)
-
-        enrollment = Enrollment.objects.create(
-            student_id=student_id,
-            classroom=classroom
-        )
-        return Response(EnrollmentSerializer(enrollment).data, status=status.HTTP_201_CREATED)
+        try:
+            # Gọi Service để xử lý logic nghiệp vụ
+            enrollment, payment = CourseService.enroll_student(
+                student_id=student_id, 
+                classroom_id=classroom.id,
+                created_by_user=request.user
+            )
+            
+            data = EnrollmentSerializer(enrollment).data
+            data['payment_id'] = payment.id
+            data['message'] = f"Đăng ký thành công. Một yêu cầu thanh toán đã được tạo với mã #{payment.id}."
+            
+            return Response(data, status=status.HTTP_201_CREATED)
+            
+        except DjangoValidationError as e:
+            return Response({'error': str(e.message if hasattr(e, 'message') else e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
     def my_classes(self, request):
@@ -159,23 +195,93 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
             
         return Response(dates)
 
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Kết thúc lớp học thông qua CourseService (Staff/Admin only)"""
+        from .services import CourseService
+        from .serializers import ClassRoomSerializer
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        
+        try:
+            classroom = CourseService.complete_classroom(classroom_id=pk)
+            return Response(ClassRoomSerializer(classroom).data)
+        except DjangoValidationError as e:
+            return Response({'error': str(e.message if hasattr(e, 'message') else e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class EnrollmentViewSet(viewsets.ModelViewSet):
     """CRUD cho Enrollment"""
     serializer_class = EnrollmentSerializer
     filterset_fields = ['status', 'classroom', 'student']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'create']:
             return [IsAuthenticated()]
+        # Cho phép Giảng viên cập nhật điểm
+        if self.action in ['update', 'partial_update']:
+            from apps.accounts.permissions import IsStaffOrAdmin, IsTeacher
+            return [IsAuthenticated(), (IsStaffOrAdmin | IsTeacher)()]
         return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def perform_create(self, serializer):
+        """Gửi email xác nhận khi học viên đăng ký khóa học"""
+        instance = serializer.save()
+        try:
+            from apps.accounts.utils import send_automated_email
+            student = instance.student
+            course = instance.course
+            if student and student.user.email and course:
+                subject = f"[FourGuys] Xác nhận đăng ký khóa học {course.code}"
+                message = (
+                    f"Chào {student.user.first_name},\n\n"
+                    f"Bạn đã đăng ký thành công khóa học: {course.name} ({course.code}).\n"
+                    f"Ngôn ngữ: {course.get_language_display()}\n"
+                    f"Trình độ: {course.get_level_display()}\n"
+                    f"Học phí: {course.tuition_fee:,.0f} VNĐ\n\n"
+                    f"Trung tâm sẽ sắp xếp lớp học cho bạn trong thời gian sớm nhất.\n"
+                    f"Trân trọng,\nĐội ngũ FourGuys."
+                )
+                send_automated_email(subject, message, [student.user.email])
+                print(f"[EMAIL] Đã gửi email đăng ký khóa học tới {student.user.email}")
+        except Exception as email_err:
+            print(f"[EMAIL ERROR] Lỗi gửi email đăng ký: {str(email_err)}")
+
+    def perform_update(self, serializer):
+        """Override để gửi email khi điểm được cập nhật"""
+        old_instance = self.get_object()
+        old_grades = (old_instance.attendance_grade, old_instance.midterm_grade, old_instance.final_test_grade)
+
+        instance = serializer.save()
+        new_grades = (instance.attendance_grade, instance.midterm_grade, instance.final_test_grade)
+
+        # Nếu có thay đổi điểm -> gửi email
+        if old_grades != new_grades and instance.classroom:
+            try:
+                from apps.accounts.utils import send_grade_email
+                student = instance.student
+                if student.user.email:
+                    send_grade_email(
+                        student=student,
+                        classroom=instance.classroom,
+                        enrollment=instance
+                    )
+            except Exception as email_err:
+                print(f"Lỗi gửi email điểm: {str(email_err)}")
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Enrollment.objects.select_related('student__user', 'classroom__course').all()
+        queryset = Enrollment.objects.select_related('student__user', 'classroom__course', 'classroom__teacher__user').all()
         
-        if getattr(user, 'role', '') == 'student':
+        role = getattr(user, 'role', '')
+        if role == 'student':
             if hasattr(user, 'student_profile'):
                 return queryset.filter(student=user.student_profile)
             return queryset.none()
             
-        return queryset
+        if role == 'teacher':
+            if hasattr(user, 'teacher_profile'):
+                return queryset.filter(classroom__teacher=user.teacher_profile)
+            return queryset.none()
+            
+        return queryset.order_by('student__user__first_name', 'student__user__last_name')

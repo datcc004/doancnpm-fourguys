@@ -142,8 +142,7 @@ class Command(BaseCommand):
                     'name': cd['name'],
                     'language': cd['lang'],
                     'level': cd['level'],
-                    'duration_weeks': cd['weeks'],
-                    'total_hours': cd['hours'],
+                    'total_lessons': cd['hours'],
                     'tuition_fee': cd['fee'],
                     'description': f"Khóa học {cd['name']} tại trung tâm ngoại ngữ",
                 }

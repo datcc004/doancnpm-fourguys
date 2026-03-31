@@ -260,7 +260,10 @@ class StudentViewSet(viewsets.ModelViewSet):
         user = student.user
         for field in ['first_name', 'last_name', 'email', 'phone', 'address', 'date_of_birth']:
             if field in data:
-                setattr(user, field, data[field])
+                val = data[field]
+                if field == 'date_of_birth' and not val:
+                    val = None
+                setattr(user, field, val)
         if 'password' in data and data['password']:
             user.set_password(data['password'])
         user.save()
@@ -313,6 +316,7 @@ class TeacherViewSet(viewsets.ModelViewSet):
             user=user,
             teacher_code=data['teacher_code'],
             specialization=data.get('specialization', ''),
+            languages=data.get('languages', ''),
             qualification=data.get('qualification', ''),
             experience_years=data.get('experience_years', 0),
             hourly_rate=data.get('hourly_rate', 0),
@@ -330,14 +334,20 @@ class TeacherViewSet(viewsets.ModelViewSet):
         user = teacher.user
         for field in ['first_name', 'last_name', 'email', 'phone', 'address', 'date_of_birth']:
             if field in data:
-                setattr(user, field, data[field])
+                val = data[field]
+                if field == 'date_of_birth' and not val:
+                    val = None
+                setattr(user, field, val)
         if 'password' in data and data['password']:
             user.set_password(data['password'])
         user.save()
 
-        for field in ['teacher_code', 'specialization', 'qualification', 'experience_years', 'hourly_rate', 'bio']:
+        for field in ['teacher_code', 'specialization', 'languages', 'qualification', 'experience_years', 'hourly_rate', 'bio']:
             if field in data:
-                setattr(teacher, field, data[field])
+                val = data[field]
+                if field in ['experience_years', 'hourly_rate'] and not val:
+                    val = 0
+                setattr(teacher, field, val)
         teacher.save()
 
         return Response(TeacherSerializer(teacher).data)

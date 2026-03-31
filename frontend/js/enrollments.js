@@ -74,11 +74,11 @@ async function loadEnrollments(page = 1) {
             <tr>
                 <td>#${e.id}</td>
                 <td>${e.student_name}</td>
-                <td>${e.classroom_name || '-'}</td>
+                <td>${e.classroom_name ? e.classroom_code + ' - ' + e.classroom_name : '<span class="text-muted"><i>Chưa xếp lớp</i></span>'}</td>
                 <td>${e.course_name || '-'}</td>
                 <td>${formatDate(e.enrollment_date)}</td>
                 <td><span class="badge ${getStatusBadge(e.status)}">${getStatusLabel(e.status)}</span></td>
-                <td>${e.final_grade || '-'}</td>
+                <td>${e.final_grade !== null ? e.final_grade : '-'}</td>
                 ${hasRole('admin', 'staff') ? `
                 <td>
                     <div class="btn-group">
@@ -111,18 +111,29 @@ async function openEnrollmentModal(enrollment = null) {
     const isEdit = !!enrollment;
     const title = isEdit ? 'Sửa đăng ký' : 'Đăng ký mới';
 
-    let students = [], classes = [];
+    let students = [], courses = [], classes = [];
     try {
-        const [studentsData, classesData] = await Promise.all([
+        const [studentsData, coursesData, allClassesData] = await Promise.all([
             API.get(CONFIG.ENDPOINTS.STUDENTS, { page_size: 200 }),
-            API.get(CONFIG.ENDPOINTS.CLASSES, { status: 'active', page_size: 100 })
+            API.get(CONFIG.ENDPOINTS.COURSES, { page_size: 200 }),
+            API.get(CONFIG.ENDPOINTS.CLASSES, { status: 'active', page_size: 200 })
         ]);
         students = studentsData.results || studentsData;
-        classes = classesData.results || classesData;
+        courses = coursesData.results || coursesData;
+        classes = allClassesData.results || allClassesData;
+        
+        // Nếu đang sửa, chỉ hiện các lớp thuộc khóa học đó
+        if (isEdit && enrollment.course) {
+            classes = classes.filter(c => c.course == enrollment.course || c.course?.id == enrollment.course);
+        }
     } catch (e) {}
 
     const studentOptions = students.map(s =>
         `<option value="${s.id}" ${isEdit && enrollment.student == s.id ? 'selected' : ''}>${s.student_code} - ${s.user.last_name} ${s.user.first_name}</option>`
+    ).join('');
+
+    const courseOptions = courses.map(c =>
+        `<option value="${c.id}" ${isEdit && enrollment.course == c.id ? 'selected' : ''}>${c.name} (${c.code})</option>`
     ).join('');
 
     const classOptions = classes.map(c =>
@@ -139,9 +150,16 @@ async function openEnrollmentModal(enrollment = null) {
                 </select>
             </div>
             <div class="form-group">
-                <label>Lớp học *</label>
-                <select name="classroom" required ${isEdit ? 'disabled' : ''}>
-                    <option value="">-- Chọn lớp --</option>
+                <label>Khóa học *</label>
+                <select name="course" required ${isEdit ? 'disabled' : ''}>
+                    <option value="">-- Chọn khóa học --</option>
+                    ${courseOptions}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Lớp học (Staff chia lớp)</label>
+                <select name="classroom">
+                    <option value="">-- Chưa xếp lớp --</option>
                     ${classOptions}
                 </select>
             </div>
@@ -156,9 +174,25 @@ async function openEnrollmentModal(enrollment = null) {
                         <option value="suspended" ${enrollment.status === 'suspended' ? 'selected' : ''}>Tạm nghỉ</option>
                     </select>
                 </div>
+            </div>
+            <div class="form-row">
                 <div class="form-group">
-                    <label>Điểm cuối kỳ</label>
-                    <input type="number" name="final_grade" value="${enrollment.final_grade || ''}" step="0.1" min="0" max="10">
+                    <label>Điểm chuyên cần (10%)</label>
+                    <input type="number" name="attendance_grade" value="${enrollment.attendance_grade || ''}" step="0.01" min="0" max="10" onchange="calculateFinalGrade()">
+                </div>
+                <div class="form-group">
+                    <label>Điểm giữa kỳ (20%)</label>
+                    <input type="number" name="midterm_grade" value="${enrollment.midterm_grade || ''}" step="0.01" min="0" max="10" onchange="calculateFinalGrade()">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Điểm cuối kỳ (70%)</label>
+                    <input type="number" name="final_test_grade" value="${enrollment.final_test_grade || ''}" step="0.01" min="0" max="10" onchange="calculateFinalGrade()">
+                </div>
+                <div class="form-group">
+                    <label>Điểm tổng kết</label>
+                    <input type="text" id="final_grade_display" value="${enrollment.final_grade || '-'}" readonly style="background:var(--bg-light); font-weight:700; color:var(--primary-600)">
                 </div>
             </div>` : ''}
             <div class="form-group">
@@ -213,6 +247,25 @@ async function deleteEnrollment(id) {
         showToast('Đã hủy đăng ký', 'success');
         loadEnrollments();
     } catch (error) {
-        showToast('Lỗi khi hủy', 'error');
+        const msg = (error.data && error.data.error) || 'Lỗi khi hủy';
+        showToast(msg, 'error');
+    }
+}
+
+function calculateFinalGrade() {
+    const aInput = document.querySelector('input[name="attendance_grade"]');
+    const mInput = document.querySelector('input[name="midterm_grade"]');
+    const fInput = document.querySelector('input[name="final_test_grade"]');
+    
+    if (!aInput || !mInput || !fInput) return;
+
+    const a = parseFloat(aInput.value) || 0;
+    const m = parseFloat(mInput.value) || 0;
+    const f = parseFloat(fInput.value) || 0;
+    
+    const total = (a * 0.1) + (m * 0.2) + (f * 0.7);
+    const display = document.getElementById('final_grade_display');
+    if (display) {
+        display.value = total.toFixed(2);
     }
 }

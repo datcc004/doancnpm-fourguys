@@ -19,7 +19,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     filterset_fields = ['status', 'payment_method', 'student']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'mark_paid']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStaffOrAdmin()]
 
@@ -39,7 +39,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def mark_paid(self, request, pk=None):
-        """Đánh dấu đã thanh toán"""
+        """Đánh dấu đã thanh toán (Cập nhật trực tiếp không cần xác nhận)"""
         payment = self.get_object()
         payment.status = 'paid'
         payment.payment_date = timezone.now()

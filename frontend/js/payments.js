@@ -115,7 +115,7 @@ async function loadPayments(page = 1) {
                 <td><strong>${formatCurrency(p.final_amount)}</strong></td>
                 <td>${methodLabels[p.payment_method] || p.payment_method}</td>
                 <td><span class="badge ${getStatusBadge(p.status)}">${getStatusLabel(p.status)}</span></td>
-                <td>${formatDateTime(p.payment_date)}</td>
+                <td>${(p.status === 'paid' || p.status === 'refunded') ? formatDateTime(p.payment_date) : '-'}</td>
                 <td>
                     <div class="btn-group">
                         ${hasRole('admin', 'staff') ? `
@@ -290,8 +290,8 @@ async function openStudentPayModal(id, amount) {
             <div id="payment-details-area" style="margin-top:20px;padding:15px;background:var(--gray-50);border-radius:var(--radius-md);border:1px dashed var(--border-color)">
                 <div style="text-align:center">
                     <p style="font-weight:600;margin-bottom:10px">Quét mã QR để thanh toán</p>
-                    <div style="width:150px;height:150px;background:#eee;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md)">
-                        <span class="material-icons-outlined" style="font-size:4rem;color:var(--gray-400)">qr_code_2</span>
+                    <div style="width:200px;height:200px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md);overflow:hidden">
+                        <img src="qr_payment.jpg" alt="QR Payment" style="width:100%;height:100%;object-fit:contain">
                     </div>
                     <p class="text-muted" style="font-size:0.85rem">Nội dung: <strong>HOCPHI ${id}</strong></p>
                 </div>
@@ -329,8 +329,8 @@ function selectPayMethod(el, method, id) {
         details.innerHTML = `
             <div style="text-align:center">
                 <p style="font-weight:600;margin-bottom:10px">Quét mã QR để thanh toán</p>
-                <div style="width:150px;height:150px;background:#eee;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md)">
-                    <span class="material-icons-outlined" style="font-size:4rem;color:var(--gray-400)">qr_code_2</span>
+                <div style="width:200px;height:200px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md);overflow:hidden">
+                    <img src="qr_payment.jpg" alt="QR Payment" style="width:100%;height:100%;object-fit:contain">
                 </div>
                 <p class="text-muted" style="font-size:0.85rem">Nội dung: <strong>HOCPHI ${id}</strong></p>
             </div>

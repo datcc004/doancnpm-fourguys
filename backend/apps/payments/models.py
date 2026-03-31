@@ -10,6 +10,7 @@ class Payment(models.Model):
     """Thanh toán học phí"""
     STATUS_CHOICES = [
         ('pending', 'Chờ thanh toán'),
+        ('verifying', 'Chờ xác nhận'),
         ('paid', 'Đã thanh toán'),
         ('overdue', 'Quá hạn'),
         ('refunded', 'Đã hoàn tiền'),

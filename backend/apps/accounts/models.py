@@ -54,6 +54,7 @@ class Teacher(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='teacher_profile')
     teacher_code = models.CharField(max_length=20, unique=True, verbose_name='Mã giảng viên')
     specialization = models.CharField(max_length=100, blank=True, null=True, verbose_name='Chuyên môn')
+    languages = models.CharField(max_length=200, blank=True, null=True, verbose_name='Ngôn ngữ giảng dạy', help_text='Ví dụ: Tiếng Anh, Tiếng Nhật (ngăn cách bằng dấu phẩy)')
     qualification = models.CharField(max_length=200, blank=True, null=True, verbose_name='Bằng cấp')
     experience_years = models.IntegerField(default=0, verbose_name='Số năm kinh nghiệm')
     hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name='Lương/giờ')

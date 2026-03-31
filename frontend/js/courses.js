@@ -1,7 +1,7 @@
 /**
  * Courses Module - Quản lý khóa học
  */
-async function renderCourses() {
+async function renderCourses(params = null) {
     const content = document.getElementById('content-area');
 
     let html = `<div class="page-enter">
@@ -37,12 +37,11 @@ async function renderCourses() {
                             <th>Tên khóa học</th>
                             <th>Ngôn ngữ</th>
                             <th>Trình độ</th>
-                            <th>Thời lượng</th>
+                            <th>Số tiết</th>
                             <th>Học phí</th>
                             <th>Lớp</th>
                             <th>HV</th>
-                            <th>Trạng thái</th>
-                            ${hasRole('admin', 'staff') ? '<th>Thao tác</th>' : ''}
+                            <th>Thao tác</th>
                         </tr>
                     </thead>
                     <tbody id="courses-table-body">
@@ -55,6 +54,15 @@ async function renderCourses() {
     </div>`;
 
     content.innerHTML = html;
+    
+    // Nếu có tham số tìm kiếm từ Dashboard (ưu tiên params từ ui.js hoặc fallback window)
+    const activeParams = params || window.navParams;
+    if (activeParams && activeParams.search) {
+        const searchInput = document.getElementById('course-search');
+        if (searchInput) searchInput.value = activeParams.search;
+        window.navParams = null; // Dùng xong xóa ngay
+    }
+
     loadCourses();
 }
 
@@ -76,30 +84,55 @@ async function loadCourses(page = 1) {
 
         tbody.innerHTML = courses.map(c => `
             <tr>
-                <td><strong>${c.code}</strong></td>
-                <td>${c.name}</td>
+                <td>
+                    <strong style="cursor:pointer; color:var(--primary-600); text-decoration:underline;" onclick="viewCourseDetails(${c.id})">
+                        ${c.code}
+                    </strong>
+                </td>
+                <td>
+                    <span style="cursor:pointer; color:var(--primary-600);" onclick="viewCourseDetails(${c.id})">
+                        ${c.name}
+                    </span>
+                </td>
                 <td>${CONFIG.LANGUAGE_LABELS[c.language] || c.language}</td>
                 <td><span class="badge badge-info">${CONFIG.LEVEL_LABELS[c.level] || c.level}</span></td>
-                <td>${c.duration_weeks} tuần (${c.total_hours}h)</td>
+                <td>${c.total_lessons || 0} tiết</td>
                 <td>${formatCurrency(c.tuition_fee)}</td>
                 <td>${c.total_classes || 0}</td>
                 <td>${c.total_students || 0}</td>
                 <td>
-                    <span class="badge ${c.is_active ? 'badge-success' : 'badge-danger'}">
-                        ${c.is_active ? 'Đang mở' : 'Đã đóng'}
-                    </span>
-                </td>
-                ${hasRole('admin', 'staff') ? `
-                <td>
                     <div class="btn-group">
-                        <button class="btn btn-sm btn-secondary" onclick="editCourse(${c.id})" title="Sửa">
-                            <span class="material-icons-outlined" style="font-size:1rem">edit</span>
+                        <button class="btn btn-sm btn-info" onclick="viewCourseDetails(${c.id})" title="Xem chi tiết lớp học">
+                            <span class="material-icons-outlined" style="font-size:1rem">visibility</span>
                         </button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteCourse(${c.id})" title="Xóa">
-                            <span class="material-icons-outlined" style="font-size:1rem">delete</span>
-                        </button>
+                        ${hasRole('admin', 'staff') ? `
+                            <button class="btn btn-sm btn-secondary" onclick="editCourse(${c.id})" title="Sửa">
+                                <span class="material-icons-outlined" style="font-size:1rem">edit</span>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteCourse(${c.id})" title="Xóa">
+                                <span class="material-icons-outlined" style="font-size:1rem">delete</span>
+                            </button>
+                        ` : ''}
+                        ${hasRole('student') && !c.is_enrolled ? `
+                            <button class="btn btn-sm btn-primary" onclick="enrollCourse(${c.id})" title="Đăng ký khóa học">
+                                <span class="material-icons-outlined" style="font-size:1rem">app_registration</span>
+                                <span style="margin-left:4px">Đăng ký</span>
+                            </button>
+                        ` : ''}
+                        ${hasRole('student') && c.is_enrolled && !c.is_studying ? `
+                            <button class="btn btn-sm" style="background-color: var(--danger-500); color: white;" onclick="cancelEnrollment(${c.id})" title="Hủy đăng ký khóa học">
+                                <span class="material-icons-outlined" style="font-size:1rem">cancel</span>
+                                <span style="margin-left:4px">Hủy ĐK</span>
+                            </button>
+                        ` : ''}
+                        ${hasRole('student') && c.is_studying ? `
+                            <span class="badge" style="background-color: var(--success-100); color: var(--success-700); padding: 6px 10px; display:inline-flex; align-items:center; border:1px solid var(--success-200);">
+                                <span class="material-icons-outlined" style="font-size:1rem; margin-right:4px;">check_circle</span>
+                                Đang học
+                            </span>
+                        ` : ''}
                     </div>
-                </td>` : ''}
+                </td>
             </tr>
         `).join('');
 
@@ -153,12 +186,12 @@ function openCourseModal(course = null) {
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Thời lượng (tuần)</label>
-                    <input type="number" name="duration_weeks" value="${isEdit ? course.duration_weeks : 12}" min="1">
+                    <label>Số tiết học</label>
+                    <input type="number" name="total_lessons" value="${isEdit ? (course.total_lessons || 24) : 24}" min="1">
                 </div>
                 <div class="form-group">
-                    <label>Tổng số giờ</label>
-                    <input type="number" name="total_hours" value="${isEdit ? course.total_hours : 36}" min="1">
+                    <label>Số HV tối đa</label>
+                    <input type="number" name="max_students" value="${isEdit ? course.max_students : 30}" min="1">
                 </div>
             </div>
             <div class="form-row">
@@ -166,18 +199,10 @@ function openCourseModal(course = null) {
                     <label>Học phí (VNĐ) *</label>
                     <input type="number" name="tuition_fee" value="${isEdit ? course.tuition_fee : 0}" min="0" required>
                 </div>
-                <div class="form-group">
-                    <label>Số HV tối đa</label>
-                    <input type="number" name="max_students" value="${isEdit ? course.max_students : 30}" min="1">
-                </div>
             </div>
             <div class="form-group">
                 <label>Mô tả</label>
                 <textarea name="description">${isEdit ? (course.description || '') : ''}</textarea>
-            </div>
-            <div class="form-group" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                <input type="checkbox" name="is_active" id="course-active-cb" ${isEdit ? (course.is_active ? 'checked' : '') : 'checked'} style="width:auto;">
-                <label for="course-active-cb" style="margin-bottom:0; cursor:pointer;">Đang mở đăng ký</label>
             </div>
             <button type="submit" class="btn btn-primary btn-full">${isEdit ? 'Cập nhật' : 'Thêm khóa học'}</button>
         </form>
@@ -191,7 +216,7 @@ async function saveCourse(event, id) {
     const form = event.target;
     const formData = new FormData(form);
     const data = Object.fromEntries(formData);
-    data.is_active = form.querySelector('[name="is_active"]').checked;
+    data.is_active = true;
 
     try {
         if (id) {
@@ -229,5 +254,81 @@ async function deleteCourse(id) {
         loadCourses();
     } catch (error) {
         showToast('Lỗi khi xóa', 'error');
+    }
+}
+
+async function enrollCourse(courseId) {
+    const confirmed = await showConfirm('Đăng ký khóa học', 'Bạn có chắc chắn muốn đăng ký khóa học này không?');
+    if (!confirmed) return;
+    
+    try {
+        await API.post(`${CONFIG.ENDPOINTS.ENROLLMENTS}`, {
+            course: courseId
+        });
+        showToast('Đăng ký khóa học thành công! Vui lòng chờ trung tâm sắp xếp lớp.', 'success');
+        loadCourses();
+    } catch (e) {
+        const errorMsg = e.data?.error || e.data?.detail || (e.data ? JSON.stringify(e.data) : 'Đăng ký thất bại');
+        showToast(errorMsg, 'error');
+    }
+}
+
+async function cancelEnrollment(courseId) {
+    const confirmed = await showConfirm('Hủy đăng ký', 'Bạn có chắc chắn muốn hủy đăng ký khóa học này không?');
+    if (!confirmed) return;
+    
+    try {
+        await API.post(`${CONFIG.ENDPOINTS.COURSES}${courseId}/cancel_enrollment/`);
+        showToast('Đã hủy đăng ký khóa học thành công.', 'success');
+        loadCourses();
+    } catch (e) {
+        const errorMsg = e.data?.error || e.data?.detail || (e.data ? JSON.stringify(e.data) : 'Hủy đăng ký thất bại');
+        showToast(errorMsg, 'error');
+    }
+}
+
+async function viewCourseDetails(id) {
+    try {
+        const course = await API.get(`${CONFIG.ENDPOINTS.COURSES}${id}/`);
+        const classes = course.classrooms || []; // API trả về classrooms kèm theo
+
+        let html = `
+            <div class="course-info-header" style="margin-bottom:20px; padding:15px; background:var(--bg-light); border-radius:8px;">
+                <p><strong>Mã khóa học:</strong> ${course.code}</p>
+                <p><strong>Ngôn ngữ:</strong> ${CONFIG.LANGUAGE_LABELS[course.language] || course.language}</p>
+                <p><strong>Học phí:</strong> ${formatCurrency(course.tuition_fee)}</p>
+            </div>
+            <h4>Danh sách lớp học (${classes.length})</h4>
+            <div class="table-wrapper" style="margin-top:10px">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mã lớp</th>
+                            <th>Tên lớp</th>
+                            <th>Giảng viên</th>
+                            <th>Lịch học</th>
+                            <th>Sĩ số</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${classes.length ? classes.map(cls => `
+                            <tr>
+                                <td><strong>${cls.code}</strong></td>
+                                <td>${cls.name}</td>
+                                <td>${cls.teacher_name || 'Chưa phân công'}</td>
+                                <td>${cls.schedule || '-'}</td>
+                                <td>${cls.current_students}/${cls.max_students}</td>
+                                <td><span class="badge ${getStatusBadge(cls.status)}">${CONFIG.STATUS_LABELS[cls.status]}</span></td>
+                            </tr>
+                        `).join('') : '<tr><td colspan="6" style="text-align:center;padding:20px">Chưa có lớp nào được mở cho khóa học này</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        openModal(`Chi tiết khóa học: ${course.name}`, html);
+    } catch (error) {
+        showToast('Không thể tải chi tiết khóa học', 'error');
     }
 }

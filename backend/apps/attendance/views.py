@@ -68,6 +68,28 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
                 }
             )
 
+        # ---- Gửi email cho học viên vắng/trễ ----
+        try:
+            from apps.accounts.utils import send_attendance_email
+            from apps.accounts.models import Student
+            status_labels = {'absent': 'Vắng mặt', 'late': 'Đi trễ'}
+            for record in data['records']:
+                if record.get('status') in ['absent', 'late']:
+                    try:
+                        student = Student.objects.select_related('user').get(id=record['student_id'])
+                        if student.user.email:
+                            send_attendance_email(
+                                student=student,
+                                classroom=classroom,
+                                session_date=data['session_date'],
+                                status_display=status_labels[record['status']],
+                                session_number=data.get('session_number', 1)
+                            )
+                    except Student.DoesNotExist:
+                        pass
+        except Exception as email_err:
+            print(f"Lỗi gửi email điểm danh: {str(email_err)}")
+
         return Response(
             AttendanceSessionSerializer(session).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK

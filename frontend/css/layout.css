@@ -15,7 +15,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.95) 100%), url('../students_background.png') center/cover no-repeat;
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(7, 89, 133, 0.45) 100%), url('../students_background.jpg') center/cover no-repeat;
     padding: 60px;
     position: relative;
     overflow: hidden;
@@ -27,7 +27,7 @@
     position: absolute;
     width: 600px;
     height: 600px;
-    background: radial-gradient(circle, rgba(99,102,241,0.25), transparent 60%);
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.15), transparent 60%);
     top: -150px;
     right: -100px;
     border-radius: 50%;
@@ -39,12 +39,13 @@
     position: absolute;
     width: 500px;
     height: 500px;
-    background: radial-gradient(circle, rgba(6,182,212,0.2), transparent 60%);
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.1), transparent 60%);
     bottom: -150px;
     left: -100px;
     border-radius: 50%;
     animation: pulse 6s infinite alternate-reverse;
 }
+
 
 @keyframes pulse {
     0% { transform: scale(1); opacity: 0.8; }
@@ -55,12 +56,12 @@
     text-align: center;
     margin-bottom: 50px;
     z-index: 2;
-    background: rgba(15, 23, 42, 0.4);
+    background: rgba(255, 255, 255, 0.08); /* Reduced for more transparency */
     padding: 30px 50px;
     border-radius: var(--radius-xl);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(12px);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(12, 74, 110, 0.2); /* Softer blue shadow */
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     position: relative;
     overflow: hidden;
@@ -71,16 +72,16 @@
     position: absolute;
     top: 0; left: -150%;
     width: 50%; height: 100%;
-    background: linear-gradient(to right, transparent, rgba(255,255,255,0.1), transparent);
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent);
     transform: skewX(-25deg);
     transition: all 0.6s ease;
 }
 
 .login-brand:hover {
     transform: translateY(-8px) scale(1.02);
-    box-shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.6), 0 0 30px rgba(99, 102, 241, 0.2);
-    border-color: rgba(255, 255, 255, 0.25);
-    background: rgba(15, 23, 42, 0.55);
+    box-shadow: 0 35px 60px -15px rgba(67, 20, 7, 0.5), 0 0 30px rgba(249, 115, 22, 0.3);
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .login-brand:hover::before {
@@ -125,7 +126,7 @@
 .login-brand h1 {
     font-size: 3.5rem;
     font-weight: 800;
-    background: linear-gradient(to right, #ffffff, #a5b4fc);
+    background: linear-gradient(to right, #ffffff, var(--primary-200));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -134,11 +135,12 @@
 }
 
 .login-brand p {
-    color: #e2e8f0;
+    color: #ffffff;
     font-size: 1.15rem;
     font-weight: 400;
-    opacity: 0.9;
+    opacity: 0.95;
 }
+
 
 .login-features {
     display: grid;
@@ -404,11 +406,15 @@
 
 .sidebar-brand-text {
     font-weight: 800;
-    font-size: 1.75rem; /* Phóng to kích thước vượt trội */
-    letter-spacing: -1px;
-    color: #ffffff;
+    font-size: 1.5rem;
+    letter-spacing: -0.5px;
+    color: var(--primary-600);
     line-height: 1;
     white-space: nowrap;
+    background: linear-gradient(to right, var(--primary-700), var(--primary-400));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .sidebar-toggle {
@@ -442,7 +448,7 @@
     gap: 12px;
     padding: 10px 14px;
     border-radius: var(--radius-md);
-    color: #e2e8f0; /* Sáng màu xám trắng để ko bị trùng nền */
+    color: var(--gray-600);
     font-size: 0.95rem;
     font-weight: 500;
     transition: all var(--transition-fast);
@@ -450,14 +456,26 @@
 }
 
 .nav-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: #ffffff;
+    background: var(--primary-50);
+    color: var(--primary-600);
 }
 
 .nav-item.active {
-    background: var(--primary-600);
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-500));
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+    position: relative;
+}
+
+.nav-item.active::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 20%;
+    height: 60%;
+    width: 4px;
+    background: #ffffff;
+    border-radius: 4px 0 0 4px;
 }
 
 .nav-item .material-icons-outlined {
@@ -470,6 +488,7 @@
     gap: 12px;
     padding: 12px 16px;
     border-top: 1px solid var(--border-light);
+    background: var(--gray-50); /* Slight contrast for the footer */
 }
 
 .user-info {
@@ -504,7 +523,7 @@
 .user-name {
     font-size: 0.9rem;
     font-weight: 600;
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .user-role {
@@ -528,13 +547,15 @@
     align-items: center;
     justify-content: space-between;
     height: var(--topbar-height);
-    padding: 0 24px;
-    background: var(--bg-topbar);
-    backdrop-filter: blur(12px);
+    padding: 0 32px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border-light);
     position: sticky;
     top: 0;
     z-index: 50;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
 }
 
 .topbar-left {
@@ -592,20 +613,13 @@
 /* === Content Area === */
 .content-area {
     flex: 1;
-    padding: 24px;
+    padding: 32px;
     position: relative;
-    background: url('../students_background.png') center/cover no-repeat fixed;
-}
-
-.content-area::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(248, 250, 252, 0.7); /* Giảm bớt độ mờ từ 0.85 xuống 0.7 để thấy ảnh rõ hơn */
-    z-index: 0;
+    background-color: var(--bg-primary);
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.03) 0, transparent 50%), 
+        radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.03) 0, transparent 50%);
+    min-height: calc(100vh - var(--topbar-height));
 }
 
 /* Đảm bảo nội dung hiển thị trên lớp phủ */

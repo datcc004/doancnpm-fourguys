@@ -258,7 +258,7 @@ function internalRender(container) {
         
         html += `
             <div class="${classes.join(' ')}" 
-                 ${isScheduled ? `onclick="selectCalendarDate('${dStr}')"` : ''}>
+                 onclick="selectCalendarDate('${dStr}')">
                 ${day}
             </div>
         `;
@@ -368,6 +368,20 @@ async function startAttendance() {
         }
 
         const attendanceDiv = document.getElementById('attendance-content');
+        
+        // Kiểm tra nếu ngày chọn không có trong lịch học
+        if (!currentCalendarState.scheduledDates.includes(date)) {
+            attendanceDiv.innerHTML = `
+                <div class="card">
+                    <div class="empty-state">
+                        <span class="material-icons-outlined">event_busy</span>
+                        <h3>Ngày ${formatDate(date)} không có lớp học</h3>
+                        <p style="color:var(--text-muted)">Vui lòng chọn các ngày có đánh dấu màu xanh trên lịch để tiến hành điểm danh.</p>
+                    </div>
+                </div>`;
+            return;
+        }
+
         attendanceDiv.innerHTML = `
             <div class="card">
                 <div class="card-header">

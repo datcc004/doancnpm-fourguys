@@ -13,7 +13,7 @@ async function renderSchedule() {
                 </div>
                 <div class="control-right">
                     <div class="date-navigator">
-                        <input type="date" id="schedule-date-picker" class="filter-select" onchange="jumpToDate(this.value)">
+                        <input type="text" id="schedule-date-picker" class="filter-select" placeholder="Chọn ngày..." readonly>
                         <button class="btn btn-primary" onclick="resetScheduleToToday()">
                             <span class="material-icons-outlined">today</span>
                             <span>Hiện tại</span>
@@ -46,19 +46,79 @@ async function renderSchedule() {
         </div>
     `;
 
-    loadMySchedule();
+    loadScheduleData();
+}
+
+async function loadScheduleData() {
+    try {
+        const classes = await API.get(`${CONFIG.ENDPOINTS.CLASSES}my_classes/`);
+        const myClasses = classes.results || classes;
+        
+        // 1. Tính toán danh sách ngày học tại chỗ (Frontend) để nhanh hơn và không bị lỗi đồng bộ
+        const allScheduledDatesSet = new Set();
+        myClasses.forEach(c => {
+            const dates = getLocalScheduledDates(c);
+            dates.forEach(d => allScheduledDatesSet.add(d));
+        });
+        const allScheduledDates = Array.from(allScheduledDatesSet);
+
+        // 2. Khởi tạo Flatpickr
+        flatpickr("#schedule-date-picker", {
+            locale: "vn",
+            dateFormat: "Y-m-d",
+            onDayCreate: (dObj, dStr, fp, dayElem) => {
+                const date = dayElem.dateObj;
+                const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                if (allScheduledDates.includes(dateKey)) {
+                    dayElem.classList.add("has-class-highlight");
+                    dayElem.innerHTML += '<span class="class-dot"></span>';
+                }
+            },
+            onChange: (selectedDates, dateStr) => {
+                jumpToDate(dateStr);
+            }
+        });
+        
+        loadMySchedule(0, myClasses);
+    } catch (e) {
+        console.error('Data error:', e);
+    }
+}
+
+// Hàm tính toán ngày học dựa trên start, end và schedule (T2-T4-T6)
+function getLocalScheduledDates(c) {
+    if (!c.start_date || !c.end_date || !c.schedule) return [];
+    const dates = [];
+    const start = new Date(c.start_date);
+    const end = new Date(c.end_date);
+    const schedule = String(c.schedule).toUpperCase();
+    
+    // 0=Sun, 1=Mon, ..., 6=Sat
+    const mapping = { 'T2': 1, 'T3': 2, 'T4': 3, 'T5': 4, 'T6': 5, 'T7': 6, 'CN': 0 };
+    const activeDays = [];
+    for (let key in mapping) { if (schedule.includes(key)) activeDays.push(mapping[key]); }
+    
+    let curr = new Date(start);
+    while (curr <= end) {
+        if (activeDays.includes(curr.getDay())) {
+            dates.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`);
+        }
+        curr.setDate(curr.getDate() + 1);
+    }
+    return dates;
 }
 
 let currentScheduleOffset = 0;
 
-async function loadMySchedule(offset = 0) {
+async function loadMySchedule(offset = 0, preloadedClasses = null) {
     currentScheduleOffset += offset;
     const grid = document.getElementById('schedule-grid');
     
     try {
-        // Lấy danh sách các lớp của tôi
-        const classes = await API.get(`${CONFIG.ENDPOINTS.CLASSES}my_classes/`);
-        const myClasses = classes.results || classes;
+        const myClasses = preloadedClasses || await (async () => {
+            const classes = await API.get(`${CONFIG.ENDPOINTS.CLASSES}my_classes/`);
+            return classes.results || classes;
+        })();
 
         // Xử lý các ngày trong tuần đang xem
         const days = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
