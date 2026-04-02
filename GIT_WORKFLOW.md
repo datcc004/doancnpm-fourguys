@@ -1,4 +1,4 @@
-# Git Workflow & Phát triển Nhóm (Hướng dẫn)
+![![alt text](image-1.png)](image.png)# Git Workflow & Phát triển Nhóm (Hướng dẫn)
 
 ## 1. Chiến lược nhánh (Git Flow đơn giản)
 
