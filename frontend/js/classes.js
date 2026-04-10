@@ -467,15 +467,24 @@ async function removeStudentFromClass(classId, enrollmentId, classCode) {
 
 async function openAddStudentModal(classId, classCode) {
     try {
-        const allStudents = await API.get(CONFIG.ENDPOINTS.STUDENTS, { page_size: 1000 });
-        const list = allStudents.results || allStudents;
+        // 1. Lấy danh sách học viên hiện đang có trong lớp
+        const currentEnrollments = await API.get(`${CONFIG.ENDPOINTS.CLASSES}${classId}/students/`);
+        const currentStudentIds = (Array.isArray(currentEnrollments) ? currentEnrollments : (currentEnrollments.results || [])).map(e => e.student);
+
+        // 2. Lấy tất cả học viên
+        const allStudentsData = await API.get(CONFIG.ENDPOINTS.STUDENTS, { page_size: 1000 });
+        const allStudents = allStudentsData.results || allStudentsData;
+
+        // 3. Lọc bỏ những người đã có trong lớp
+        const filteredList = allStudents.filter(s => !currentStudentIds.includes(s.id));
 
         const html = `
             <div class="form-group">
-                <label>Chọn học viên cần thêm</label>
+                <label>Chọn học viên cần thêm (Chỉ hiện những HV chưa có trong lớp)</label>
                 <input type="text" id="add-student-search" placeholder="Gõ tên hoặc mã HV..." onkeyup="filterAddStudentList()" style="margin-bottom:10px">
                 <div id="add-student-list" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
-                    ${list.map(s => `
+                    ${filteredList.length === 0 ? '<div style="padding:20px; text-align:center; color:var(--text-muted)">Tất cả học viên đều đã có mặt trong lớp này</div>' : 
+                        filteredList.map(s => `
                         <div class="selectable-student-item" data-name="${s.user.last_name} ${s.user.first_name}" data-code="${s.student_code}" 
                              onclick="confirmAddStudent(${classId}, ${s.id}, '${s.user.last_name} ${s.user.first_name}', '${classCode}')"
                              style="padding: 10px; border-bottom: 1px solid var(--border-light); cursor: pointer; transition: background 0.2s;">

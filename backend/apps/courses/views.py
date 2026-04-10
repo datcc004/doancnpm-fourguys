@@ -131,7 +131,11 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
         # Nếu là Học viên -> Trả về lớp đã đăng ký
         if user.role == 'student' and hasattr(user, 'student_profile'):
             student = user.student_profile
-            enrollments = Enrollment.objects.filter(student=student, status='active').select_related('classroom__course', 'classroom__teacher__user')
+            enrollments = Enrollment.objects.filter(
+                student=student, 
+                status='active',
+                classroom__isnull=False
+            ).select_related('classroom__course', 'classroom__teacher__user')
             classrows_list = [e.classroom for e in enrollments]
             return Response(ClassRoomSerializer(classrows_list, many=True).data)
             

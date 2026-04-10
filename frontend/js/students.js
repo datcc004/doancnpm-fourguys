@@ -25,6 +25,7 @@ async function renderStudents() {
                     <thead>
                         <tr>
                             <th>Mã HV</th>
+                            <th>Tài khoản</th>
                             <th>Họ tên</th>
                             <th>Email</th>
                             <th>SĐT</th>
@@ -34,7 +35,7 @@ async function renderStudents() {
                         </tr>
                     </thead>
                     <tbody id="students-table-body">
-                        <tr><td colspan="7"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
+                        <tr><td colspan="8"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -54,13 +55,14 @@ async function loadStudents(page = 1) {
         const tbody = document.getElementById('students-table-body');
 
         if (!students.length) {
-            tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-icons-outlined">school</span><h3>Chưa có học viên nào</h3></div></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-icons-outlined">school</span><h3>Chưa có học viên nào</h3></div></td></tr>';
             return;
         }
 
         tbody.innerHTML = students.map(s => `
             <tr>
                 <td><strong>${s.student_code}</strong></td>
+                <td><code style="background:var(--bg-secondary);padding:2px 8px;border-radius:4px;font-size:0.85rem">${s.user.username}</code></td>
                 <td>${s.user.last_name} ${s.user.first_name}</td>
                 <td>${s.user.email || '-'}</td>
                 <td>${s.user.phone || '-'}</td>
@@ -84,7 +86,7 @@ async function loadStudents(page = 1) {
         }
     } catch (error) {
         document.getElementById('students-table-body').innerHTML =
-            '<tr><td colspan="7"><p style="color:var(--danger-500);padding:20px">Lỗi tải dữ liệu</p></td></tr>';
+            '<tr><td colspan="8"><p style="color:var(--danger-500);padding:20px">Lỗi tải dữ liệu</p></td></tr>';
     }
 }
 

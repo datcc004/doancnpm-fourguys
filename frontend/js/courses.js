@@ -39,6 +39,7 @@ async function renderCourses(params = null) {
                             <th>Trình độ</th>
                             <th>Số tiết</th>
                             <th>Học phí</th>
+                            <th>Lớp mở đăng ký</th>
                             <th>Lớp</th>
                             <th>HV</th>
                             <th>Thao tác</th>
@@ -98,6 +99,14 @@ async function loadCourses(page = 1) {
                 <td><span class="badge badge-info">${CONFIG.LEVEL_LABELS[c.level] || c.level}</span></td>
                 <td>${c.total_lessons || 0} tiết</td>
                 <td>${formatCurrency(c.tuition_fee)}</td>
+                <td>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        ${(c.classrooms || [])
+                            .filter(cls => cls.status === 'upcoming')
+                            .map(cls => `<span class="badge badge-success" style="cursor: pointer;" onclick="viewCourseDetails(${c.id})" title="Nhấn để xem chi tiết">${cls.code}</span>`)
+                            .join('') || '<span class="text-muted" style="font-size: 0.8rem;">Chưa có lớp</span>'}
+                    </div>
+                </td>
                 <td>${c.total_classes || 0}</td>
                 <td>${c.total_students || 0}</td>
                 <td>
@@ -113,12 +122,14 @@ async function loadCourses(page = 1) {
                                 <span class="material-icons-outlined" style="font-size:1rem">delete</span>
                             </button>
                         ` : ''}
-                        ${hasRole('student') && !c.is_enrolled ? `
-                            <button class="btn btn-sm btn-primary" onclick="enrollCourse(${c.id})" title="Đăng ký khóa học">
-                                <span class="material-icons-outlined" style="font-size:1rem">app_registration</span>
-                                <span style="margin-left:4px">Đăng ký</span>
-                            </button>
-                        ` : ''}
+                        ${hasRole('student') && !c.is_enrolled ? (
+                            (c.classrooms || []).some(cls => cls.status === 'upcoming') ? `
+                                <button class="btn btn-sm btn-primary" onclick="enrollCourse(${c.id})" title="Đăng ký khóa học">
+                                    <span class="material-icons-outlined" style="font-size:1rem">app_registration</span>
+                                    <span style="margin-left:4px">Đăng ký</span>
+                                </button>
+                            ` : `<span class="text-muted" style="font-size:0.85rem">Chưa mở đăng ký</span>`
+                        ) : ''}
                         ${hasRole('student') && c.is_enrolled && !c.is_studying ? `
                             <button class="btn btn-sm" style="background-color: var(--danger-500); color: white;" onclick="cancelEnrollment(${c.id})" title="Hủy đăng ký khóa học">
                                 <span class="material-icons-outlined" style="font-size:1rem">cancel</span>

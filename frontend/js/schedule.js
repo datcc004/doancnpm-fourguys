@@ -87,7 +87,7 @@ async function loadScheduleData() {
 
 // Hàm tính toán ngày học dựa trên start, end và schedule (T2-T4-T6)
 function getLocalScheduledDates(c) {
-    if (!c.start_date || !c.end_date || !c.schedule) return [];
+    if (!c || !c.start_date || !c.end_date || !c.schedule) return [];
     const dates = [];
     const start = new Date(c.start_date);
     const end = new Date(c.end_date);
@@ -120,7 +120,30 @@ async function loadMySchedule(offset = 0, preloadedClasses = null) {
             return classes.results || classes;
         })();
 
-        // Xử lý các ngày trong tuần đang xem
+        // Hiển thị trạng thái trống nếu không có lớp nào
+        if (!myClasses || myClasses.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state" style="padding: 60px 20px; text-align: center; background: white; border-radius: 12px;">
+                    <span class="material-icons-outlined" style="font-size: 4rem; color: var(--gray-300); margin-bottom: 20px;">calendar_today</span>
+                    <h3 style="color: var(--text-primary); margin-bottom: 10px;">Bạn chưa có lớp học nào</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px; max-width: 400px; margin-left: auto; margin-right: auto;">
+                        Lịch học sẽ hiển thị tại đây sau khi bạn đăng ký và được xếp vào lớp học chính thức.
+                    </p>
+                    <button class="btn btn-primary" onclick="navigate('courses')">
+                        <span class="material-icons-outlined">explore</span>
+                        <span>Khám phá khóa học ngay</span>
+                    </button>
+                </div>
+            `;
+            // Cập nhật title/label thành dấu gạch ngang
+            const titleEl = document.getElementById('schedule-week-range-title');
+            const labelEl = document.getElementById('schedule-week-range-label');
+            if (titleEl) titleEl.textContent = "-- / --";
+            if (labelEl) labelEl.textContent = "-- / --";
+            return;
+        }
+
+        // Khai báo các ngày trong tuần (Cần thiết cho phần render bên dưới)
         const days = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
         const dayCodes = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
         
@@ -191,8 +214,22 @@ async function loadMySchedule(offset = 0, preloadedClasses = null) {
 
                     // 2. So khớp Thứ và Giờ
                     const classSchedule = String(c.schedule).toUpperCase();
-                    return classSchedule.includes(dayCode.toUpperCase()) && 
-                           classSchedule.includes(slot.split(' - ')[0]);
+                    if (!classSchedule.includes(dayCode.toUpperCase())) return false;
+                    
+                    const timeMatch = classSchedule.match(/(\d{1,2}):\d{2}/);
+                    if (timeMatch) {
+                        const classStartHour = parseInt(timeMatch[1]);
+                        const slotStartHour = parseInt(slot.split(':')[0]);
+                        
+                        // Các ca học thường kéo dài 2-2.5 giờ.
+                        // So khớp nếu giờ bắt đầu của lớp học nằm trong khoảng [slotStartHour, slotStartHour + 2]
+                        let slotEndHour = slotStartHour + 2;
+                        if (slotStartHour === 15) slotEndHour = 18; // Cho phép ca 15h kéo dài đến 18h
+                        
+                        return classStartHour >= slotStartHour && classStartHour < slotEndHour;
+                    }
+
+                    return classSchedule.includes(slot.split(' - ')[0]);
                 }) : null;
 
                 if (match) {

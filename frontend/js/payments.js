@@ -11,6 +11,7 @@ async function renderPayments() {
     } catch (e) {}
 
     let html = `<div class="page-enter">
+        ${hasRole('admin', 'staff') ? `
         <div class="stats-grid stagger-in" style="margin-bottom:20px">
             <div class="stat-card green">
                 <div class="stat-icon"><span class="material-icons-outlined">check_circle</span></div>
@@ -34,6 +35,7 @@ async function renderPayments() {
                 </div>
             </div>
         </div>
+        ` : ''}
 
         <div class="toolbar">
             <div class="toolbar-left">

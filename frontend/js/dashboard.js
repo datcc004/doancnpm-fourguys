@@ -46,6 +46,7 @@ async function renderDashboard() {
                     <p>Đăng ký</p>
                 </div>
             </div>
+            ${hasRole('admin', 'staff') ? `
             <div class="stat-card pink">
                 <div class="stat-icon"><span class="material-icons-outlined">payments</span></div>
                 <div class="stat-info">
@@ -53,10 +54,13 @@ async function renderDashboard() {
                     <p>Tổng doanh thu</p>
                 </div>
             </div>
+            ` : ''}
         </div>`;
 
         // Charts & Top Courses
-        html += `<div class="charts-grid">
+        const isAdminOrStaff = hasRole('admin', 'staff');
+        html += `<div class="charts-grid" ${!isAdminOrStaff ? 'style="grid-template-columns: 1fr;"' : ''}>
+            ${isAdminOrStaff ? `
             <div class="card">
                 <div class="card-header">
                     <h3>Doanh thu 6 tháng gần nhất</h3>
@@ -65,6 +69,7 @@ async function renderDashboard() {
                     ${renderRevenueChart(stats.monthly_revenue || [])}
                 </div>
             </div>
+            ` : ''}
             <div class="card">
                 <div class="card-header">
                     <h3>Top khóa học</h3>
