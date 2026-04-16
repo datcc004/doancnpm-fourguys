@@ -1,4 +1,4 @@
-![![alt text](image-1.png)](image.png)# Git Workflow & Phát triển Nhóm (Hướng dẫn)
+# Git Workflow & Phát triển Nhóm (Hướng dẫn)
 
 ## 1. Chiến lược nhánh (Git Flow đơn giản)
 
@@ -25,13 +25,28 @@
 - `docs`: Cập nhật tài liệu/hướng dẫn.
 - `chore`: Cập nhật cấu trúc file, thư viện, cài đặt.
 
-## 3. Cấu trúc mã nguồn dễ mở rộng (Scalability)
+## 3. Cấu hình Tài khoản GitHub (Contributor Tracking)
+
+Để GitHub ghi nhận đúng Contributor (Người đóng góp), bạn phải đảm bảo email khi commit trùng khớp với email trên tài khoản GitHub của mình. 
+**GitHub KHÔNG ghi nhận dựa trên tài khoản thực hiện câu lệnh `git push`**.
+
+- **Kiểm tra tác giả hiện tại:** `git config user.name` và `git config user.email`
+- **Sửa lại tên và email (cho 1 repositoy cụ thể):** 
+  ```bash
+  git config user.name "Tên GitHub Của Bạn"
+  git config user.email "email-cua-ban@gmail.com"
+  ```
+- **Nếu đã lỡ commit sai tác giả, cách sửa lại:**
+  1. `git commit --amend --author="Tên Mới <email-moi@gmail.com>"`
+  2. `git push -f` (Lưu ý: Chỉ dùng Force push trên nhánh của cá nhân bạn hoặc khi đã thống nhất với team).
+
+## 4. Cấu trúc mã nguồn dễ mở rộng (Scalability)
 
 - **Apps riêng biệt**: Tiếp tục chia nhỏ các ứng dụng (apps) trong Django như hiện tại (`courses`, `accounts`, `payments`, `attendance`).
 - **Service Layer**: Mọi logic nghiệp vụ (business logic) để trong file `services.py` của từng app. Tránh viết logic phức tạp trong `views.py` hay `models.py`.
 - **Environment Variables**: Tất cả cấu hình (DB, API Key, Secret Key) để trong file `.env`. **Tuyệt đối không đẩy file `.env` lên Git**.
 
-## 4. Quản lý Quy trình đào tạo (Training Management)
+## 5. Quản lý Quy trình đào tạo (Training Management)
 
 - Lớp học cần có trạng thái rõ ràng: `Sắp khai giảng` -> `Đang học` -> `Kết thúc`.
 - Chỉ cho phép đăng ký vào lớp `Sắp khai giảng`.
