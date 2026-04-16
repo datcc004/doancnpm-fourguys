@@ -1,11 +1,13 @@
 """
 Views - API endpoints cho attendance
+Nghiệp vụ: Chọn lớp → Chọn buổi học → Điểm danh học viên
 """
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
+from django.db.models import Q
 
 from .models import AttendanceSession, AttendanceRecord
 from .serializers import (
@@ -36,7 +38,11 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     @transaction.atomic
     def bulk_create(self, request):
-        """Điểm danh hàng loạt cho cả lớp"""
+        """Điểm danh hàng loạt cho cả lớp
+        
+        Luồng: Chọn buổi → Điểm danh từng HV
+        Records: [{student_id, status, absence_reason?, is_excused?}]
+        """
         serializer = BulkAttendanceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -46,7 +52,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         if request.user.role == 'teacher' and classroom.teacher.user != request.user:
             return Response({'error': 'Bạn không được phân công dạy lớp này'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Tạo session
+        # Tạo session (hoặc lấy lại nếu đã tồn tại)
         session, created = AttendanceSession.objects.get_or_create(
             classroom_id=data['classroom_id'],
             session_date=data['session_date'],
@@ -57,32 +63,48 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
             }
         )
 
-        # Cập nhật/tạo records
+        # Cập nhật topic nếu đã có session
+        if not created and data.get('topic'):
+            session.topic = data['topic']
+            session.save(update_fields=['topic'])
+
+        # Cập nhật/tạo records cho từng HV
         for record in data['records']:
+            record_status = record.get('status', 'present')
+            defaults = {
+                'status': record_status,
+            }
+            
+            # Xử lý logic vắng mặt
+            if record_status == 'absent':
+                defaults['absence_reason'] = record.get('absence_reason', 'Không rõ')
+                defaults['is_excused'] = record.get('is_excused', False)
+            else:
+                # Present → clear thông tin vắng
+                defaults['absence_reason'] = None
+                defaults['is_excused'] = False
+
             AttendanceRecord.objects.update_or_create(
                 session=session,
                 student_id=record['student_id'],
-                defaults={
-                    'status': record.get('status', 'present'),
-                    'notes': record.get('notes', '')
-                }
+                defaults=defaults
             )
 
-        # ---- Gửi email cho học viên vắng/trễ ----
+        # ---- Gửi email cho học viên vắng ----
         try:
             from apps.accounts.utils import send_attendance_email
             from apps.accounts.models import Student
-            status_labels = {'absent': 'Vắng mặt', 'late': 'Đi trễ'}
             for record in data['records']:
-                if record.get('status') in ['absent', 'late']:
+                if record.get('status') == 'absent':
                     try:
                         student = Student.objects.select_related('user').get(id=record['student_id'])
                         if student.user.email:
+                            excused_text = "Có phép" if record.get('is_excused') else "Không phép"
                             send_attendance_email(
                                 student=student,
                                 classroom=classroom,
                                 session_date=data['session_date'],
-                                status_display=status_labels[record['status']],
+                                status_display=f"Vắng mặt ({excused_text})",
                                 session_number=data.get('session_number', 1)
                             )
                     except Student.DoesNotExist:
@@ -97,7 +119,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def by_class(self, request):
-        """Lấy danh sách điểm danh theo lớp"""
+        """Lấy danh sách buổi điểm danh theo lớp"""
         classroom_id = request.query_params.get('classroom_id')
         if not classroom_id:
             return Response({'error': 'Thiếu classroom_id'}, status=status.HTTP_400_BAD_REQUEST)
@@ -120,6 +142,24 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         return Response(AttendanceSessionListSerializer(sessions.order_by('session_number'), many=True).data)
 
     @action(detail=False, methods=['get'])
+    def session_detail(self, request):
+        """Lấy chi tiết một buổi điểm danh theo session_id
+        Trả về danh sách HV và trạng thái điểm danh
+        """
+        session_id = request.query_params.get('session_id')
+        if not session_id:
+            return Response({'error': 'Thiếu session_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            session = AttendanceSession.objects.select_related('classroom').prefetch_related(
+                'records__student__user'
+            ).get(id=session_id)
+        except AttendanceSession.DoesNotExist:
+            return Response({'error': 'Buổi học không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(AttendanceSessionSerializer(session).data)
+
+    @action(detail=False, methods=['get'])
     def student_report(self, request):
         """Báo cáo điểm danh của một học viên"""
         student_id = request.query_params.get('student_id')
@@ -134,19 +174,43 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
 
         total = records.count()
         present = records.filter(status='present').count()
-        late = records.filter(status='late').count()
         absent = records.filter(status='absent').count()
-        excused = records.filter(status='excused').count()
+        absent_excused = records.filter(status='absent', is_excused=True).count()
+        absent_unexcused = records.filter(status='absent', is_excused=False).count()
 
         return Response({
             'total_sessions': total,
             'present': present,
-            'late': late,
             'absent': absent,
-            'excused': excused,
-            'attendance_rate': round((present + late) / total * 100, 1) if total > 0 else 0,
+            'absent_excused': absent_excused,
+            'absent_unexcused': absent_unexcused,
+            'attendance_rate': round(present / total * 100, 1) if total > 0 else 0,
             'records': AttendanceRecordSerializer(records.order_by('-session__session_date'), many=True).data
         })
+
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        """Lịch sử điểm danh theo lớp - tìm kiếm theo tên HV"""
+        classroom_id = request.query_params.get('classroom_id')
+        search = request.query_params.get('search', '').strip()
+
+        if not classroom_id:
+            return Response({'error': 'Thiếu classroom_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sessions = AttendanceSession.objects.filter(
+            classroom_id=classroom_id
+        ).select_related('classroom').prefetch_related(
+            'records__student__user'
+        ).order_by('session_number')
+
+        if search:
+            sessions = sessions.filter(
+                Q(records__student__user__first_name__icontains=search) |
+                Q(records__student__user__last_name__icontains=search) |
+                Q(records__student__student_code__icontains=search)
+            ).distinct()
+
+        return Response(AttendanceSessionListSerializer(sessions, many=True).data)
 
 
 class AttendanceRecordViewSet(viewsets.ModelViewSet):

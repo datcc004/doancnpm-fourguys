@@ -210,9 +210,24 @@ class StudentViewSet(viewsets.ModelViewSet):
     """CRUD cho Student"""
     queryset = Student.objects.select_related('user').all()
     serializer_class = StudentSerializer
-    permission_classes = [IsAuthenticated, IsStaffOrAdmin]
     search_fields = ['student_code', 'user__first_name', 'user__last_name', 'user__email']
     filterset_fields = ['level']
+
+    def get_permissions(self):
+        if self.action == 'retrieve':
+            from rest_framework.permissions import IsAuthenticated
+            return [IsAuthenticated()]
+        from .permissions import IsStaffOrAdmin
+        from rest_framework.permissions import IsAuthenticated
+        return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def get_object(self):
+        obj = super().get_object()
+        user = self.request.user
+        if user.role not in ['admin', 'staff'] and obj.user != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Bạn không có quyền xem thông tin này.")
+        return obj
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -283,9 +298,24 @@ class TeacherViewSet(viewsets.ModelViewSet):
     """CRUD cho Teacher"""
     queryset = Teacher.objects.select_related('user').all()
     serializer_class = TeacherSerializer
-    permission_classes = [IsAuthenticated, IsStaffOrAdmin]
     search_fields = ['teacher_code', 'user__first_name', 'user__last_name', 'specialization']
     filterset_fields = ['specialization']
+
+    def get_permissions(self):
+        if self.action == 'retrieve':
+            from rest_framework.permissions import IsAuthenticated
+            return [IsAuthenticated()]
+        from .permissions import IsStaffOrAdmin
+        from rest_framework.permissions import IsAuthenticated
+        return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def get_object(self):
+        obj = super().get_object()
+        user = self.request.user
+        if user.role not in ['admin', 'staff'] and obj.user != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Bạn không có quyền xem thông tin này.")
+        return obj
 
     def get_serializer_class(self):
         if self.action == 'create':

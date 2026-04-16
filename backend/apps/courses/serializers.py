@@ -2,7 +2,7 @@
 Serializers - Chuyển đổi dữ liệu cho API courses
 """
 from rest_framework import serializers
-from .models import Course, ClassRoom, Enrollment
+from .models import Course, ClassRoom, Enrollment, TestScore
 from apps.accounts.serializers import StudentSerializer, TeacherSerializer
 
 
@@ -99,6 +99,7 @@ class CourseSerializer(serializers.ModelSerializer):
 class ClassRoomSerializer(serializers.ModelSerializer):
     """Serializer cho ClassRoom"""
     course_name = serializers.CharField(source='course.name', read_only=True)
+    course_tuition_fee = serializers.IntegerField(source='course.tuition_fee', read_only=True)
     teacher_name = serializers.SerializerMethodField()
     current_students = serializers.ReadOnlyField()
     is_full = serializers.ReadOnlyField()
@@ -106,7 +107,7 @@ class ClassRoomSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClassRoom
-        fields = ['id', 'name', 'code', 'course', 'course_name', 'teacher', 'teacher_name',
+        fields = ['id', 'name', 'code', 'course', 'course_name', 'course_tuition_fee', 'teacher', 'teacher_name',
                   'room', 'schedule', 'total_lessons', 'learning_mode', 'start_date', 'end_date', 'start_time', 'end_time',
                   'status', 'max_students', 'current_students', 'is_full', 'is_enrolled', 'notes', 'created_at']
         read_only_fields = ['id', 'created_at']
@@ -250,14 +251,16 @@ class ClassRoomDetailSerializer(ClassRoomSerializer):
                 'student': StudentSerializer(e.student).data,
                 'enrollment_date': e.enrollment_date,
                 'status': e.status,
-                'final_grade': e.final_grade,
             }
             for e in enrollments
         ]
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
-    """Serializer cho Enrollment"""
+    """Serializer cho Enrollment
+    
+    Nghiệp vụ: Đăng ký ghi danh → Nộp tiền (đặt cọc) → Admin duyệt
+    """
     from apps.accounts.models import Student
     
     student = serializers.PrimaryKeyRelatedField(
@@ -269,32 +272,40 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     classroom_name = serializers.CharField(source='classroom.name', read_only=True, allow_null=True)
     classroom_code = serializers.CharField(source='classroom.code', read_only=True, allow_null=True)
     course_name = serializers.SerializerMethodField()
+    payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
+    approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
 
     class Meta:
         model = Enrollment
         fields = ['id', 'student', 'student_name', 'course', 'course_name', 'classroom', 'classroom_name', 'classroom_code',
-                  'enrollment_date', 'status', 'attendance_grade', 
-                  'midterm_grade', 'final_test_grade', 'final_grade', 'letter_grade', 'gpa4_score', 'notes']
-        read_only_fields = ['id', 'enrollment_date', 'final_grade', 'letter_grade', 'gpa4_score']
+                  'enrollment_date', 'status',
+                  'deposit_amount', 'payment_status', 'payment_status_display',
+                  'approval_status', 'approval_status_display',
+                  'notes']
+        read_only_fields = ['id', 'enrollment_date']
 
     def validate(self, data):
         """Ngăn chặn đăng ký trùng khóa học và tự động gán student"""
         request = self.context.get('request')
         student = data.get('student')
         
+        # Nếu đang update (PATCH) và không gửi student, lấy từ instance
+        if not student and self.instance:
+            student = self.instance.student
+            
         # Nếu là học viên tự đăng ký -> Tự động lấy student từ profile
-        if not student and request and request.user.role == 'student':
+        if not student and request and getattr(request.user, 'role', '') == 'student':
             if hasattr(request.user, 'student_profile'):
                 student = request.user.student_profile
                 data['student'] = student
             else:
                 raise serializers.ValidationError("Tài khoản của bạn chưa có thông tin hồ sơ học viên.")
 
-        if not student:
+        if not student and not self.instance:
             raise serializers.ValidationError({"student": "Vui lòng chọn học viên."})
 
-        course = data.get('course')
-        classroom = data.get('classroom')
+        course = data.get('course', getattr(self.instance, 'course', None) if self.instance else None)
+        classroom = data.get('classroom', getattr(self.instance, 'classroom', None) if self.instance else None)
         
         # Nếu đang tạo mới, kiểm tra trùng khóa học
         if not self.instance:
@@ -302,13 +313,39 @@ class EnrollmentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Học viên này đã đăng ký khóa học này rồi.")
         
         # Nếu gán lớp, kiểm tra sĩ số lớp đó (trừ khi đang sửa chính bản ghi này)
-        if classroom:
+        if classroom and 'classroom' in data: # Chỉ check sĩ số nếu classroom bị đổi hoặc set lần đầu
             if classroom.current_students >= classroom.max_students:
                 # Nếu là update và bản ghi hiện tại ĐÃ thuộc lớp này thì không báo lỗi
                 if self.instance and self.instance.classroom == classroom:
                     pass
                 else:
                     raise serializers.ValidationError("Lớp học này đã đủ số lượng học viên.")
+
+        # --- KIỂM TRA ĐẶT CỌC 30% HỌC PHÍ ---
+        from decimal import Decimal
+        course_obj = course
+        if not course_obj and classroom:
+            course_obj = classroom.course
+
+        if course_obj:
+            deposit_amount = data.get('deposit_amount')
+            if deposit_amount is None:
+                # Nếu đang update và không gửi tiền cọc, lấy từ db
+                deposit_amount = getattr(self.instance, 'deposit_amount', 0)
+                
+            deposit_decimal = Decimal(str(deposit_amount) if deposit_amount else '0')
+            required_deposit = course_obj.tuition_fee * Decimal('0.3')
+            
+            if deposit_decimal < required_deposit:
+                raise serializers.ValidationError({
+                    "deposit_amount": f"Phải cọc trước tối thiểu 30% học phí (tương đương {(required_deposit):,.0f} VNĐ) mới có thể đăng ký."
+                })
+                
+            # Tư động cập nhật trạng thái thanh toán dựa theo số tiền cọc
+            if deposit_decimal >= course_obj.tuition_fee:
+                data['payment_status'] = 'paid'
+            elif deposit_decimal >= required_deposit:
+                data['payment_status'] = 'deposited'
         
         return data
 
@@ -324,3 +361,40 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         if not user.last_name:
             return user.first_name
         return f"{user.last_name} {user.first_name}".strip()
+
+
+class TestScoreSerializer(serializers.ModelSerializer):
+    """Serializer cho TestScore"""
+    student_name = serializers.SerializerMethodField()
+    student_code = serializers.CharField(source='student.student_code', read_only=True)
+    classroom_name = serializers.CharField(source='classroom.name', read_only=True)
+    classroom_code = serializers.CharField(source='classroom.code', read_only=True)
+    test_type_display = serializers.CharField(source='get_test_type_display', read_only=True)
+    score_10 = serializers.ReadOnlyField()
+
+    class Meta:
+        model = TestScore
+        fields = ['id', 'student', 'student_name', 'student_code',
+                  'classroom', 'classroom_name', 'classroom_code',
+                  'test_name', 'test_type', 'test_type_display',
+                  'score', 'max_score', 'score_10', 'test_date',
+                  'notes', 'created_by', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
+
+    def get_student_name(self, obj):
+        user = obj.student.user
+        if not user.last_name:
+            return user.first_name
+        return f"{user.last_name} {user.first_name}".strip()
+
+
+class BulkTestScoreSerializer(serializers.Serializer):
+    """Serializer nhập điểm hàng loạt cho cả lớp"""
+    classroom_id = serializers.IntegerField()
+    test_name = serializers.CharField()
+    test_type = serializers.CharField(default='quiz')
+    test_date = serializers.DateField()
+    max_score = serializers.DecimalField(max_digits=5, decimal_places=2, default=10)
+    scores = serializers.ListField(
+        child=serializers.DictField()
+    )

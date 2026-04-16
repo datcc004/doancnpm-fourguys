@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Course, ClassRoom, Enrollment
+from .models import Course, ClassRoom, Enrollment, TestScore
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
@@ -15,5 +15,12 @@ class ClassRoomAdmin(admin.ModelAdmin):
 
 @admin.register(Enrollment)
 class EnrollmentAdmin(admin.ModelAdmin):
-    list_display = ['student', 'classroom', 'enrollment_date', 'status', 'final_grade']
-    list_filter = ['status']
+    list_display = ['student', 'classroom', 'enrollment_date', 'status', 'payment_status', 'approval_status', 'deposit_amount']
+    list_filter = ['status', 'payment_status', 'approval_status']
+    search_fields = ['student__user__first_name', 'student__user__last_name']
+
+@admin.register(TestScore)
+class TestScoreAdmin(admin.ModelAdmin):
+    list_display = ['student', 'classroom', 'test_name', 'test_type', 'score', 'max_score', 'test_date']
+    list_filter = ['test_type', 'classroom']
+    search_fields = ['student__user__first_name', 'student__user__last_name', 'test_name']

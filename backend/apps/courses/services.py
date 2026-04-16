@@ -19,8 +19,7 @@ class CourseService:
             language=data.get('language', 'english'),
             level=data.get('level', 'beginner'),
             description=data.get('description', ''),
-            duration_weeks=data.get('duration_weeks', 12),
-            total_hours=data.get('total_hours', 36),
+            total_lessons=data.get('total_lessons', 24),
             tuition_fee=data.get('tuition_fee', 0),
             max_students=data.get('max_students', 30)
         )
@@ -45,8 +44,7 @@ class CourseService:
         course.language = data.get('language', course.language)
         course.level = data.get('level', course.level)
         course.description = data.get('description', course.description)
-        course.duration_weeks = data.get('duration_weeks', course.duration_weeks)
-        course.total_hours = data.get('total_hours', course.total_hours)
+        course.total_lessons = data.get('total_lessons', course.total_lessons)
         course.tuition_fee = data.get('tuition_fee', course.tuition_fee)
         course.max_students = data.get('max_students', course.max_students)
         course.is_active = data.get('is_active', course.is_active)
@@ -101,7 +99,7 @@ class CourseService:
 
     @staticmethod
     @transaction.atomic
-    def enroll_student(student_id, classroom_id, created_by_user=None):
+    def enroll_student(student_id, classroom_id, deposit_amount=0, created_by_user=None):
         """
         Đăng ký học viên vào lớp học:
         - Kiểm tra trùng lịch
@@ -136,13 +134,26 @@ class CourseService:
                     f"Trùng lịch! Học viên đã có lịch học '{en.classroom.schedule}' tại lớp {en.classroom.code}."
                 )
 
-        if classroom.current_students >= classroom.max_students:
-            raise ValidationError("Lớp đã đầy.")
+        # Kiểm tra cọc tổi thiểu 30%
+        from decimal import Decimal
+        required_deposit = classroom.course.tuition_fee * Decimal('0.3')
+        deposit_decimal = Decimal(str(deposit_amount) if deposit_amount else '0')
+        
+        if deposit_decimal < required_deposit:
+            raise ValidationError(f"Phải cọc trước tối thiểu 30% học phí (tương đương {(required_deposit):,.0f} VNĐ) mới có thể đăng ký.")
+            
+        payment_status = 'unpaid'
+        if deposit_decimal >= classroom.course.tuition_fee:
+            payment_status = 'paid'
+        elif deposit_decimal >= required_deposit:
+            payment_status = 'deposited'
 
         enrollment = Enrollment.objects.create(
             student=student,
             classroom=classroom,
             status='active',
+            deposit_amount=deposit_decimal,
+            payment_status=payment_status,
             notes=f"Đăng ký vào ngày {date.today()}"
         )
 
@@ -153,8 +164,9 @@ class CourseService:
             enrollment=enrollment,
             amount=classroom.course.tuition_fee,
             discount=0,
-            final_amount=classroom.course.tuition_fee,
-            status='pending',
+            final_amount=classroom.course.tuition_fee - deposit_decimal,
+            payment_method='cash',
+            status='paid' if payment_status == 'paid' else 'pending',
             due_date=due_date,
             created_by=created_by_user,
             notes=f"Học phí lớp {classroom.code}"
@@ -187,6 +199,16 @@ class CourseService:
 
         Enrollment.objects.filter(classroom=classroom, status='active').update(status='completed')
         return classroom
+
+    @staticmethod
+    def auto_complete_expired_classes():
+        from datetime import date
+        expired_classes = ClassRoom.objects.filter(status='active', end_date__lt=date.today())
+        for c in expired_classes:
+            try:
+                CourseService.complete_classroom(c.id)
+            except Exception:
+                pass
 
     @staticmethod
     def get_active_course_stats():

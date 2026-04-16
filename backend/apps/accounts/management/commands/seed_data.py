@@ -197,6 +197,8 @@ class Command(BaseCommand):
         # Tạo Payments
         payment_count = 0
         for enrollment in Enrollment.objects.select_related('classroom__course', 'student'):
+            if not enrollment.classroom or not enrollment.classroom.course:
+                continue
             fee = enrollment.classroom.course.tuition_fee
             _, created = Payment.objects.get_or_create(
                 student=enrollment.student,

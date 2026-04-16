@@ -31,6 +31,9 @@ const CONFIG = {
         // Attendance
         ATTENDANCE_SESSIONS: '/attendance/sessions/',
         ATTENDANCE_RECORDS: '/attendance/records/',
+
+        // Test Scores
+        TEST_SCORES: '/courses/scores/',
     },
 
     // Role labels
@@ -55,8 +58,13 @@ const CONFIG = {
         refunded: 'Đã hoàn tiền',
         present: 'Có mặt',
         absent: 'Vắng',
-        late: 'Đi trễ',
-        excused: 'Có phép',
+        absent_excused: 'Vắng có phép',
+        absent_unexcused: 'Vắng không phép',
+        // Enrollment payment/approval
+        unpaid: 'Chưa thanh toán',
+        deposited: 'Đã đặt cọc',
+        approved: 'Đã duyệt',
+        rejected: 'Từ chối',
     },
 
     // Language labels

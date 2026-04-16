@@ -206,8 +206,11 @@ function formatDateTime(dateStr) {
 function getStatusBadge(status) {
     const badges = {
         active: 'badge-success', paid: 'badge-success', present: 'badge-success', completed: 'badge-info',
+        approved: 'badge-success', deposited: 'badge-info',
         pending: 'badge-warning', late: 'badge-warning', upcoming: 'badge-warning', suspended: 'badge-warning',
+        unpaid: 'badge-warning',
         absent: 'badge-danger', dropped: 'badge-danger', overdue: 'badge-danger', cancelled: 'badge-danger',
+        rejected: 'badge-danger',
         excused: 'badge-neutral', refunded: 'badge-neutral',
     };
     return badges[status] || 'badge-neutral';

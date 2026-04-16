@@ -1,5 +1,9 @@
 """
 Models - Điểm danh học viên
+Nghiệp vụ mới: Chọn buổi học → Điểm danh học viên
+- Mỗi buổi học chỉ có 1 danh sách điểm danh
+- Trạng thái: Present / Absent
+- Nếu Absent → bắt buộc lý do + có phép/không phép
 """
 from django.db import models
 from apps.accounts.models import Student
@@ -7,7 +11,7 @@ from apps.courses.models import ClassRoom
 
 
 class AttendanceSession(models.Model):
-    """Buổi điểm danh"""
+    """Buổi điểm danh (ClassSession)"""
     classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE,
                                   related_name='attendance_sessions', verbose_name='Lớp học')
     session_date = models.DateField(verbose_name='Ngày học')
@@ -26,16 +30,21 @@ class AttendanceSession(models.Model):
         ordering = ['-session_date']
 
     def __str__(self):
-        return f"{self.classroom.name} - {self.session_date}"
+        return f"{self.classroom.name} - Buổi {self.session_number} - {self.session_date}"
 
 
 class AttendanceRecord(models.Model):
-    """Chi tiết điểm danh từng học viên"""
+    """Chi tiết điểm danh từng học viên
+    
+    Quy tắc:
+    - status chỉ có 2 giá trị: present / absent
+    - Nếu absent → phải có absence_reason
+    - is_excused: True = vắng có phép, False = vắng không phép
+    - Một học viên chỉ có 1 trạng thái trong 1 buổi
+    """
     STATUS_CHOICES = [
         ('present', 'Có mặt'),
         ('absent', 'Vắng'),
-        ('late', 'Đi trễ'),
-        ('excused', 'Có phép'),
     ]
 
     session = models.ForeignKey(AttendanceSession, on_delete=models.CASCADE,
@@ -44,8 +53,11 @@ class AttendanceRecord(models.Model):
                                 related_name='attendance_records', verbose_name='Học viên')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='present',
                               verbose_name='Trạng thái')
-    notes = models.CharField(max_length=200, blank=True, null=True, verbose_name='Ghi chú')
+    absence_reason = models.CharField(max_length=500, blank=True, null=True,
+                                      verbose_name='Lý do vắng')
+    is_excused = models.BooleanField(default=False, verbose_name='Có phép')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'attendance'

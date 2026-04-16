@@ -5,12 +5,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Avg
+from django.db import transaction
 
-from .models import Course, ClassRoom, Enrollment
+from .models import Course, ClassRoom, Enrollment, TestScore
 from .serializers import (
     CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
-    EnrollmentSerializer
+    EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer
 )
 from apps.accounts.permissions import IsStaffOrAdmin
 
@@ -61,6 +62,24 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code', 'course__name']
     filterset_fields = ['status', 'course', 'teacher']
 
+    def get_queryset(self):
+        # Tự động cập nhật các lớp hết hạn trước khi list
+        from .services import CourseService
+        CourseService.auto_complete_expired_classes()
+        
+        user = self.request.user
+        queryset = ClassRoom.objects.select_related('course', 'teacher__user')
+        
+        # Nếu là giảng viên -> Chỉ thấy lớp mình dạy
+        if user.role == 'teacher' and hasattr(user, 'teacher_profile'):
+            return queryset.filter(teacher=user.teacher_profile)
+            
+        # Nếu là học viên -> Chỉ thấy lớp mình đã/đang học
+        if user.role == 'student' and hasattr(user, 'student_profile'):
+            return queryset.filter(enrollments__student=user.student_profile).distinct()
+            
+        return queryset.all()
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'enroll', 'my_classes', 'students']:
             return [IsAuthenticated()]
@@ -94,10 +113,13 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Vui lòng cung cấp student_id'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            deposit_amount = request.data.get('deposit_amount', 0)
+            
             # Gọi Service để xử lý logic nghiệp vụ
             enrollment, payment = CourseService.enroll_student(
                 student_id=student_id, 
                 classroom_id=classroom.id,
+                deposit_amount=deposit_amount,
                 created_by_user=request.user
             )
             
@@ -115,6 +137,10 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_classes(self, request):
         """Danh sách các lớp học của người dùng hiện tại (Học viên hoặc Admin)"""
+        from .services import CourseService
+        # Tự động đóng lớp khi hết thời gian
+        CourseService.auto_complete_expired_classes()
+        
         user = request.user
         
         # Nếu là Admin/Staff -> Trả về tất cả các lớp đang mở (để xem lịch tổng quát)
@@ -122,18 +148,18 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
             classrooms = ClassRoom.objects.filter(status__in=['active', 'upcoming']).select_related('course', 'teacher__user')
             return Response(ClassRoomSerializer(classrooms, many=True).data)
             
-        # Nếu là Giảng viên -> Trả về các lớp đang dạy
+        # Nếu là Giảng viên -> Trả về các lớp đang dạy và đã dạy
         if user.role == 'teacher' and hasattr(user, 'teacher_profile'):
             teacher = user.teacher_profile
-            classrooms = ClassRoom.objects.filter(teacher=teacher, status__in=['active', 'upcoming']).select_related('course', 'teacher__user')
+            classrooms = ClassRoom.objects.filter(teacher=teacher, status__in=['active', 'upcoming', 'completed']).select_related('course', 'teacher__user')
             return Response(ClassRoomSerializer(classrooms, many=True).data)
             
-        # Nếu là Học viên -> Trả về lớp đã đăng ký
+        # Nếu là Học viên -> Trả về lớp đã đăng ký và hoàn thành
         if user.role == 'student' and hasattr(user, 'student_profile'):
             student = user.student_profile
             enrollments = Enrollment.objects.filter(
                 student=student, 
-                status='active',
+                status__in=['active', 'completed'],
                 classroom__isnull=False
             ).select_related('classroom__course', 'classroom__teacher__user')
             classrows_list = [e.classroom for e in enrollments]
@@ -217,12 +243,12 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
 class EnrollmentViewSet(viewsets.ModelViewSet):
     """CRUD cho Enrollment"""
     serializer_class = EnrollmentSerializer
-    filterset_fields = ['status', 'classroom', 'student']
+    filterset_fields = ['status', 'classroom', 'student', 'payment_status', 'approval_status']
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'create']:
             return [IsAuthenticated()]
-        # Cho phép Giảng viên cập nhật điểm
+        # Cho phép Giảng viên cập nhật
         if self.action in ['update', 'partial_update']:
             from apps.accounts.permissions import IsStaffOrAdmin, IsTeacher
             return [IsAuthenticated(), (IsStaffOrAdmin | IsTeacher)()]
@@ -251,27 +277,21 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         except Exception as email_err:
             print(f"[EMAIL ERROR] Lỗi gửi email đăng ký: {str(email_err)}")
 
-    def perform_update(self, serializer):
-        """Override để gửi email khi điểm được cập nhật"""
-        old_instance = self.get_object()
-        old_grades = (old_instance.attendance_grade, old_instance.midterm_grade, old_instance.final_test_grade)
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Admin duyệt đăng ký ghi danh"""
+        enrollment = self.get_object()
+        enrollment.approval_status = 'approved'
+        enrollment.save(update_fields=['approval_status'])
+        return Response(EnrollmentSerializer(enrollment).data)
 
-        instance = serializer.save()
-        new_grades = (instance.attendance_grade, instance.midterm_grade, instance.final_test_grade)
-
-        # Nếu có thay đổi điểm -> gửi email
-        if old_grades != new_grades and instance.classroom:
-            try:
-                from apps.accounts.utils import send_grade_email
-                student = instance.student
-                if student.user.email:
-                    send_grade_email(
-                        student=student,
-                        classroom=instance.classroom,
-                        enrollment=instance
-                    )
-            except Exception as email_err:
-                print(f"Lỗi gửi email điểm: {str(email_err)}")
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Admin từ chối đăng ký ghi danh"""
+        enrollment = self.get_object()
+        enrollment.approval_status = 'rejected'
+        enrollment.save(update_fields=['approval_status'])
+        return Response(EnrollmentSerializer(enrollment).data)
 
     def get_queryset(self):
         user = self.request.user
@@ -289,3 +309,224 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             return queryset.none()
             
         return queryset.order_by('student__user__first_name', 'student__user__last_name')
+
+
+class TestScoreViewSet(viewsets.ModelViewSet):
+    """CRUD cho TestScore - Quản lý điểm Test"""
+    serializer_class = TestScoreSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['classroom', 'student', 'test_type']
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = TestScore.objects.select_related('student__user', 'classroom__course').all()
+
+        if user.role == 'student' and hasattr(user, 'student_profile'):
+            return queryset.filter(student=user.student_profile)
+
+        if user.role == 'teacher' and hasattr(user, 'teacher_profile'):
+            return queryset.filter(classroom__teacher=user.teacher_profile)
+
+        return queryset
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'student_report', 'class_summary']:
+            return [IsAuthenticated()]
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'bulk_create']:
+            from apps.accounts.permissions import IsStaffOrAdmin, IsTeacher
+            return [IsAuthenticated(), (IsStaffOrAdmin | IsTeacher)()]
+        return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    @transaction.atomic
+    def bulk_create(self, request):
+        """Nhập điểm hàng loạt cho cả lớp"""
+        serializer = BulkTestScoreSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        classroom = ClassRoom.objects.get(id=data['classroom_id'])
+
+        # Kiểm tra quyền GV
+        if request.user.role == 'teacher' and classroom.teacher.user != request.user:
+            return Response({'error': 'Bạn không được phân công dạy lớp này'}, status=status.HTTP_403_FORBIDDEN)
+
+        created_count = 0
+        updated_count = 0
+        for item in data['scores']:
+            obj, created = TestScore.objects.update_or_create(
+                student_id=item['student_id'],
+                classroom=classroom,
+                test_name=data['test_name'],
+                defaults={
+                    'test_type': data['test_type'],
+                    'score': item['score'],
+                    'max_score': data['max_score'],
+                    'test_date': data['test_date'],
+                    'notes': item.get('notes', ''),
+                    'created_by': request.user,
+                }
+            )
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        return Response({
+            'message': f'Đã lưu {created_count} bản ghi mới, cập nhật {updated_count} bản ghi.',
+            'created': created_count,
+            'updated': updated_count,
+        })
+
+    @action(detail=False, methods=['get'])
+    def by_class(self, request):
+        """Danh sách điểm theo lớp học"""
+        classroom_id = request.query_params.get('classroom_id')
+        if not classroom_id:
+            return Response({'error': 'Thiếu classroom_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        scores = self.get_queryset().filter(classroom_id=classroom_id).order_by('student__user__last_name', 'test_date')
+        return Response(TestScoreSerializer(scores, many=True).data)
+
+    @action(detail=False, methods=['get'])
+    def student_report(self, request):
+        """Báo cáo điểm của một học viên trong một lớp"""
+        student_id = request.query_params.get('student_id')
+        classroom_id = request.query_params.get('classroom_id')
+
+        if not student_id:
+            return Response({'error': 'Thiếu student_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        scores = TestScore.objects.filter(student_id=student_id)
+        if classroom_id:
+            scores = scores.filter(classroom_id=classroom_id)
+
+        scores_data = TestScoreSerializer(scores.order_by('test_date'), many=True).data
+
+        # Tính điểm tổng kết
+        midterm_scores = scores.filter(test_type='midterm')
+        final_scores = scores.filter(test_type='final')
+        all_scores = scores.all()
+
+        avg_midterm = None
+        avg_final = None
+        avg_all = None
+
+        if midterm_scores.exists():
+            avg_midterm = round(float(midterm_scores.aggregate(avg=Avg('score'))['avg'] or 0), 2)
+        if final_scores.exists():
+            avg_final = round(float(final_scores.aggregate(avg=Avg('score'))['avg'] or 0), 2)
+        if all_scores.exists():
+            # Tính trung bình tất cả bài test (quy hệ 10)
+            total = 0
+            count = 0
+            for s in all_scores:
+                total += s.score_10
+                count += 1
+            avg_all = round(total / count, 2) if count > 0 else None
+
+        # Tính điểm tổng kết theo trọng số: Giữa kỳ 30%, Cuối kỳ 70%
+        final_grade = None
+        if avg_midterm is not None and avg_final is not None:
+            final_grade = round(avg_midterm * 0.3 + avg_final * 0.7, 2)
+        elif avg_all is not None:
+            final_grade = avg_all
+
+        # Letter grade
+        letter_grade = '-'
+        if final_grade is not None:
+            if final_grade >= 8.5: letter_grade = 'A'
+            elif final_grade >= 7.8: letter_grade = 'B+'
+            elif final_grade >= 7.0: letter_grade = 'B'
+            elif final_grade >= 6.3: letter_grade = 'C+'
+            elif final_grade >= 5.5: letter_grade = 'C'
+            elif final_grade >= 4.8: letter_grade = 'D+'
+            elif final_grade >= 4.0: letter_grade = 'D'
+            else: letter_grade = 'F'
+
+        return Response({
+            'scores': scores_data,
+            'total_tests': scores.count(),
+            'avg_midterm': avg_midterm,
+            'avg_final': avg_final,
+            'avg_all': avg_all,
+            'final_grade': final_grade,
+            'letter_grade': letter_grade,
+        })
+
+    @action(detail=False, methods=['get'])
+    def class_summary(self, request):
+        """Tổng kết điểm toàn lớp"""
+        classroom_id = request.query_params.get('classroom_id')
+        if not classroom_id:
+            return Response({'error': 'Thiếu classroom_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Unique test names in this class
+        test_names = TestScore.objects.filter(
+            classroom_id=classroom_id
+        ).values_list('test_name', flat=True).distinct().order_by('test_name')
+
+        # All students in this class
+        enrollments = Enrollment.objects.filter(
+            classroom_id=classroom_id, status='active'
+        ).select_related('student__user')
+
+        students_data = []
+        for e in enrollments:
+            student = e.student
+            scores = TestScore.objects.filter(student=student, classroom_id=classroom_id)
+            
+            # Build scores map
+            scores_map = {}
+            for s in scores:
+                scores_map[s.test_name] = {
+                    'id': s.id,
+                    'score': float(s.score),
+                    'max_score': float(s.max_score),
+                    'score_10': s.score_10,
+                }
+
+            # Calculate averages
+            midterms = scores.filter(test_type='midterm')
+            finals = scores.filter(test_type='final')
+            
+            avg_mid = round(float(midterms.aggregate(avg=Avg('score'))['avg'] or 0), 2) if midterms.exists() else None
+            avg_fin = round(float(finals.aggregate(avg=Avg('score'))['avg'] or 0), 2) if finals.exists() else None
+
+            final_grade = None
+            if avg_mid is not None and avg_fin is not None:
+                final_grade = round(avg_mid * 0.3 + avg_fin * 0.7, 2)
+            elif scores.exists():
+                total = sum(s.score_10 for s in scores)
+                final_grade = round(total / scores.count(), 2)
+
+            letter = '-'
+            if final_grade is not None:
+                if final_grade >= 8.5: letter = 'A'
+                elif final_grade >= 7.8: letter = 'B+'
+                elif final_grade >= 7.0: letter = 'B'
+                elif final_grade >= 6.3: letter = 'C+'
+                elif final_grade >= 5.5: letter = 'C'
+                elif final_grade >= 4.8: letter = 'D+'
+                elif final_grade >= 4.0: letter = 'D'
+                else: letter = 'F'
+
+            user = student.user
+            students_data.append({
+                'student_id': student.id,
+                'student_name': f"{user.last_name} {user.first_name}".strip(),
+                'student_code': student.student_code,
+                'scores': scores_map,
+                'avg_midterm': avg_mid,
+                'avg_final': avg_fin,
+                'final_grade': final_grade,
+                'letter_grade': letter,
+            })
+
+        return Response({
+            'test_names': list(test_names),
+            'students': students_data,
+        })

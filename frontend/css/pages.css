@@ -227,38 +227,779 @@
     color: var(--text-secondary);
 }
 
-/* === Attendance Page === */
-.attendance-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
+/* === Attendance Page (Nghiệp vụ mới) === */
+.att-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 4px;
 }
 
-.attendance-student-card {
+.att-toolbar {
+    padding: 16px 20px !important;
+}
+
+.att-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.att-toolbar-icon {
+    font-size: 1.6rem;
+    color: var(--primary-500);
+    background: var(--primary-50);
+    padding: 10px;
+    border-radius: var(--radius-md);
+}
+
+.att-toolbar-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.att-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.att-select {
+    padding: 8px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 0.9rem;
+    min-width: 320px;
+    transition: border-color var(--transition-fast);
+}
+
+.att-select:focus {
+    outline: none;
+    border-color: var(--primary-400);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+
+/* Layout */
+.att-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .att-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.att-sidebar-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.att-main-col {
+    min-width: 0;
+}
+
+/* Calendar */
+.att-calendar {
+    padding: 16px !important;
+}
+
+.att-cal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.att-cal-header h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-transform: capitalize;
+}
+
+.att-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+}
+
+.att-cal-weekday {
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding-bottom: 8px;
+}
+
+.att-cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    border-radius: var(--radius-sm);
+    cursor: default;
+    color: var(--gray-300);
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+.att-cal-day.att-cal-active {
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.att-cal-day.att-cal-scheduled {
+    background-color: var(--primary-50);
+    color: var(--primary-700);
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid var(--primary-200);
+}
+
+.att-cal-day.att-cal-scheduled:hover {
+    background-color: var(--primary-500);
+    color: white;
+    transform: scale(1.1);
+    z-index: 10;
+}
+
+.att-cal-day.att-cal-attended {
+    background-color: var(--success-50);
+    border-color: var(--success-300);
+    color: var(--success-700);
+}
+
+.att-cal-day.att-cal-attended:hover {
+    background-color: var(--success-500);
+    color: white;
+}
+
+.att-cal-day.att-cal-selected {
+    background: var(--primary-600) !important;
+    color: white !important;
+    box-shadow: var(--shadow-sm);
+    border-color: var(--primary-700) !important;
+    transform: scale(1.05);
+}
+
+.att-cal-day.att-cal-today {
+    box-shadow: inset 0 0 0 2px var(--accent-400);
+}
+
+.att-cal-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+    flex-wrap: wrap;
+}
+
+.att-cal-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.att-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.att-dot-scheduled { background: var(--primary-400); }
+.att-dot-attended { background: var(--success-500); }
+.att-dot-today { background: var(--accent-400); box-shadow: inset 0 0 0 1px var(--accent-600); }
+.att-dot-lg {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* Session List */
+.att-session-list {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+.att-session-list-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.att-session-list-header h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.att-session-list-header h4 .material-icons-outlined {
+    font-size: 1.1rem;
+    color: var(--primary-500);
+}
+
+.att-session-items {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.att-empty-mini {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.att-session-item {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-light);
     transition: all var(--transition-fast);
+    border-left: 3px solid transparent;
 }
 
-.attendance-student-card select {
-    padding: 6px 8px;
+.att-session-item:hover {
+    background: var(--gray-50);
+}
+
+.att-session-item.att-session-active {
+    background: var(--primary-50);
+    border-left-color: var(--primary-500);
+}
+
+.att-session-num {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.att-session-active .att-session-num {
+    background: var(--primary-500);
+    color: white;
+}
+
+.att-session-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.att-session-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.att-session-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.att-session-stats {
+    flex-shrink: 0;
+}
+
+.att-present-count {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--success-600);
+    background: var(--success-50);
+    padding: 3px 8px;
+    border-radius: 20px;
+}
+
+.att-session-ok .att-present-count { color: var(--success-600); background: var(--success-50); }
+.att-session-warn .att-present-count { color: var(--warning-600); background: var(--warning-50); }
+.att-session-bad .att-present-count { color: var(--danger-600); background: rgba(239,68,68,0.08); }
+
+/* Placeholder */
+.att-placeholder {
+    padding: 60px 20px !important;
+}
+
+.att-placeholder-content {
+    text-align: center;
+}
+
+.att-placeholder-icon {
+    font-size: 3.5rem;
+    color: var(--gray-300);
+    margin-bottom: 16px;
+    display: block;
+}
+
+.att-placeholder-content h3 {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+.att-placeholder-content p {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* Form Card */
+.att-form-card {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+.att-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, var(--primary-50), var(--bg-card));
+    border-bottom: 1px solid var(--border-light);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.att-form-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.att-form-title .material-icons-outlined {
+    font-size: 1.5rem;
+    color: var(--primary-500);
+}
+
+.att-form-title h3 {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.att-form-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.att-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.att-stats-mini {
+    display: flex;
+    gap: 12px;
+}
+
+.att-stat-present, .att-stat-absent {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.att-stat-present {
+    color: var(--success-600);
+    background: var(--success-50);
+}
+
+.att-stat-present .material-icons-outlined {
+    font-size: 1rem;
+    color: var(--success-500);
+}
+
+.att-stat-absent {
+    color: var(--danger-600);
+    background: rgba(239,68,68,0.08);
+}
+
+.att-stat-absent .material-icons-outlined {
+    font-size: 1rem;
+    color: var(--danger-500);
+}
+
+.att-save-btn {
+    white-space: nowrap;
+}
+
+/* Topic */
+.att-topic-row {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.att-topic-row label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.att-topic-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 0.85rem;
+}
+
+.att-topic-input:focus {
+    border-color: var(--primary-400);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+}
+
+/* Search */
+.att-search-row {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--gray-50);
+}
+
+.att-search-row .material-icons-outlined {
+    font-size: 1.2rem;
+    color: var(--text-muted);
+}
+
+.att-search-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 0.85rem;
+    outline: none;
+}
+
+/* Table */
+.att-table-wrapper {
+    overflow-x: auto;
+}
+
+.att-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.att-table thead th {
+    background: var(--gray-50);
+    padding: 12px 16px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid var(--border-light);
+    white-space: nowrap;
+}
+
+.att-th-stt { width: 50px; text-align: center; }
+.att-th-name { text-align: left; }
+.att-th-status { width: 70px; text-align: center; }
+.att-th-reason { min-width: 160px; }
+.att-th-excused { width: 80px; text-align: center; }
+
+.att-row {
+    border-bottom: 1px solid var(--border-light);
+    transition: background-color 0.3s ease;
+}
+
+.att-row:hover {
+    background: var(--gray-50);
+}
+
+/* Color-coded status rows */
+.att-row-present {
+    background: rgba(16, 185, 129, 0.04) !important;
+    border-left: 3px solid var(--success-500);
+}
+
+.att-row-absent {
+    background: rgba(239, 68, 68, 0.04) !important;
+    border-left: 3px solid var(--danger-500);
+}
+
+.att-row-excused {
+    background: rgba(245, 158, 11, 0.06) !important;
+    border-left: 3px solid var(--warning-500);
+}
+
+.att-td-stt {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    padding: 10px 8px;
+}
+
+.att-td-name {
+    padding: 10px 16px;
+}
+
+.att-student-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.att-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, var(--primary-400), var(--accent-400));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.att-student-fullname {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.att-student-code {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+/* Radio buttons */
+.att-td-check {
+    text-align: center;
+    padding: 10px 8px;
+}
+
+.att-radio {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.att-radio input {
+    display: none;
+}
+
+.att-radio-mark {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--gray-300);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.att-radio input:checked + .att-mark-present {
+    border-color: var(--success-500);
+    background: var(--success-500);
+    box-shadow: 0 2px 8px rgba(16,185,129,0.3);
+}
+
+.att-radio input:checked + .att-mark-present::after {
+    content: '✓';
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.att-radio input:checked + .att-mark-absent {
+    border-color: var(--danger-500);
+    background: var(--danger-500);
+    box-shadow: 0 2px 8px rgba(239,68,68,0.3);
+}
+
+.att-radio input:checked + .att-mark-absent::after {
+    content: '✗';
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 800;
+}
+
+.att-radio-mark:hover {
+    transform: scale(1.15);
+}
+
+/* Reason input */
+.att-td-reason {
+    padding: 8px 10px;
+}
+
+.att-reason-input {
+    width: 100%;
+    padding: 6px 10px;
     background: var(--bg-input);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
     font-family: var(--font-family);
     font-size: 0.8rem;
+    transition: all var(--transition-fast);
 }
 
-.attendance-student-name {
-    flex: 1;
+.att-reason-input:focus {
+    border-color: var(--primary-400);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+}
+
+.att-reason-input:disabled {
+    background: var(--gray-50);
+    color: var(--gray-300);
+    cursor: not-allowed;
+}
+
+/* Checkbox */
+.att-td-excused {
+    text-align: center;
+    padding: 10px 8px;
+}
+
+.att-checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.att-checkbox input {
+    display: none;
+}
+
+.att-checkbox-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--gray-300);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.att-checkbox input:checked + .att-checkbox-mark {
+    border-color: var(--warning-500);
+    background: var(--warning-500);
+}
+
+.att-checkbox input:checked + .att-checkbox-mark::after {
+    content: '✓';
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.att-checkbox input:disabled + .att-checkbox-mark {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Footer */
+.att-form-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border-light);
+    background: var(--gray-50);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.att-legend-bar {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.att-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Loading */
+.att-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px;
+    color: var(--text-muted);
     font-size: 0.85rem;
-    font-weight: 500;
+}
+
+/* Student View Badges */
+.att-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-block;
+}
+
+.att-badge-present { background: var(--success-50); color: var(--success-600); }
+.att-badge-absent { background: rgba(239,68,68,0.08); color: var(--danger-600); }
+.att-badge-excused { background: var(--warning-50); color: var(--warning-600); }
+
+.att-table-student td {
+    padding: 12px 16px;
+    font-size: 0.85rem;
+}
+
+.att-table-student thead th {
+    padding: 14px 16px;
 }
 
 /* === Schedule Page === */
@@ -453,132 +1194,8 @@
 .dot.exam { background: #ffeb3b; }
 .dot.suspended { background: #f44336; }
 
-/* === Smart Calendar (Attendance) === */
-.calendar-container {
-    background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
-    padding: 16px;
-    margin-bottom: 20px;
-    box-shadow: var(--shadow-sm);
-    max-width: 350px;
-}
-
-.calendar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-}
-
-.calendar-header h4 {
-    font-size: 0.95rem;
-    font-weight: 700;
-}
-
-.calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-}
-
-.calendar-weekday {
-    text-align: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    padding-bottom: 8px;
-}
-
-.calendar-day {
-    aspect-ratio: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.85rem;
-    border-radius: var(--radius-sm);
-    cursor: default;
-    color: var(--gray-300);
-    transition: all var(--transition-fast);
-}
-
-.calendar-day.active-month {
-    color: var(--text-primary);
-    cursor: pointer;
-}
-
-.calendar-day.day-scheduled {
-    background-color: var(--primary-100);
-    color: var(--primary-700);
-    font-weight: 700;
-    cursor: pointer;
-    border: 1px solid var(--primary-300);
-    box-shadow: inset 0 0 0 1px var(--primary-200);
-}
-
-.calendar-day.day-scheduled:hover {
-    background-color: var(--primary-600);
-    color: white;
-    transform: scale(1.1);
-    z-index: 10;
-}
-
-.calendar-day.selected {
-    background: var(--primary-600) !important;
-    color: white !important;
-    box-shadow: var(--shadow-sm);
-    border-color: var(--primary-700);
-}
-
-.calendar-day.today {
-    box-shadow: inset 0 0 0 1px var(--accent-500);
-}
-
-.has-class-highlight {
-    background: transparent !important;
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-    position: relative;
-    border: none !important;
-}
-
-.class-dot {
-    position: absolute;
-    bottom: 6px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 3px;
-    height: 3px;
-    background: #0ea5e9; /* Màu chấm xanh dương */
-    border-radius: 50%;
-}
-
-/* Chỉ bôi xanh nhạt cho ngày Hiện tại */
-.flatpickr-day.today {
-    background: #e0f2fe !important;
-    border-color: #7dd3fc !important;
-    color: #0369a1 !important;
-}
-
-.calendar-footer {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-light);
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.calendar-dot {
-    width: 6px;
-    height: 6px;
-    background: var(--primary-500);
-    border-radius: 50%;
-}
 /* === Grades Page (Premium Excel Mode) === */
+
 .table-excel {
     width: 100%;
     border-collapse: collapse;

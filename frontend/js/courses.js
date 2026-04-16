@@ -124,7 +124,7 @@ async function loadCourses(page = 1) {
                         ` : ''}
                         ${hasRole('student') && !c.is_enrolled ? (
                             (c.classrooms || []).some(cls => cls.status === 'upcoming') ? `
-                                <button class="btn btn-sm btn-primary" onclick="enrollCourse(${c.id})" title="Đăng ký khóa học">
+                                <button class="btn btn-sm btn-primary" onclick="enrollCourse(${c.id}, ${c.tuition_fee})" title="Đăng ký khóa học">
                                     <span class="material-icons-outlined" style="font-size:1rem">app_registration</span>
                                     <span style="margin-left:4px">Đăng ký</span>
                                 </button>
@@ -268,15 +268,112 @@ async function deleteCourse(id) {
     }
 }
 
-async function enrollCourse(courseId) {
-    const confirmed = await showConfirm('Đăng ký khóa học', 'Bạn có chắc chắn muốn đăng ký khóa học này không?');
-    if (!confirmed) return;
+async function enrollCourse(courseId, tuitionFee) {
+    const depositAmount = tuitionFee * 0.3;
     
+    const html = `
+        <div style="text-align:center; padding: 20px;">
+            <p style="margin-bottom:20px; font-size:1.05rem">Vui lòng chọn hình thức thanh toán để hoàn tất ghi danh:</p>
+            <div style="display:flex; justify-content:center; gap:20px; margin-bottom:20px;">
+                <button class="btn btn-outline-primary" style="padding:20px; flex:1; height:auto; display:flex; flex-direction:column; align-items:center;" onclick="submitEnrollCourse(${courseId}, ${depositAmount})">
+                    <span class="material-icons-outlined" style="font-size:2.5rem; margin-bottom:10px">payments</span>
+                    <strong style="font-size:1.1rem; margin-bottom:5px">Đặt cọc 30%</strong>
+                    <span style="font-size:1rem; color:var(--text-secondary)">${formatCurrency(depositAmount)}</span>
+                </button>
+                <button class="btn btn-primary" style="padding:20px; flex:1; height:auto; display:flex; flex-direction:column; align-items:center;" onclick="submitEnrollCourse(${courseId}, ${tuitionFee})">
+                    <span class="material-icons-outlined" style="font-size:2.5rem; margin-bottom:10px">task_alt</span>
+                    <strong style="font-size:1.1rem; margin-bottom:5px">Thanh toán toàn bộ</strong>
+                    <span style="font-size:1rem; color:rgba(255,255,255,0.9)">${formatCurrency(tuitionFee)}</span>
+                </button>
+            </div>
+            <p style="color:var(--text-muted); font-size:0.85rem">* Yêu cầu thanh toán tối thiểu 30% học phí mới có thể ghi danh vào hệ thống.</p>
+        </div>
+    `;
+    openModal('Thanh toán Đăng ký Khóa học', html);
+}
+
+async function submitEnrollCourse(courseId, amount) {
+    const html = `
+        <div class="payment-gateway page-enter">
+            <div style="text-align:center;margin-bottom:20px">
+                <p class="text-secondary">Số tiền cần thanh toán:</p>
+                <h2 style="color:var(--primary-600);font-size:2rem">${formatCurrency(amount)}</h2>
+            </div>
+            
+            <div class="form-group">
+                <label>Chọn phương thức thanh toán</label>
+                <div class="payment-methods-grid">
+                    <div class="payment-method-card active" onclick="selectCoursePayMethod(this, 'transfer', ${courseId})">
+                        <span class="material-icons-outlined">account_balance</span>
+                        <p>Chuyển khoản</p>
+                    </div>
+                    <div class="payment-method-card" onclick="selectCoursePayMethod(this, 'card', ${courseId})">
+                        <span class="material-icons-outlined">credit_card</span>
+                        <p>Thẻ ATM/Visa</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="course-payment-details" style="margin-top:20px;padding:15px;background:var(--gray-50);border-radius:var(--radius-md);border:1px dashed var(--border-color)">
+                <div style="text-align:center">
+                    <p style="font-weight:600;margin-bottom:10px">Quét mã QR để thanh toán</p>
+                    <div style="width:200px;height:200px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md);overflow:hidden">
+                        <img src="qr_payment.jpg" alt="QR Payment" style="width:100%;height:100%;object-fit:contain">
+                    </div>
+                    <p class="text-muted" style="font-size:0.85rem">Nội dung: <strong>DANGKY KH ${courseId}</strong></p>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-full" style="margin-top:20px" onclick="finalizeEnrollCourse(${courseId}, ${amount})">Tôi đã thanh toán</button>
+            <button class="btn btn-outline-secondary btn-full" style="margin-top:10px" onclick="closeModal()">Hủy thanh toán</button>
+        </div>
+    `;
+    openModal('Thanh toán Đăng ký', html);
+}
+
+function selectCoursePayMethod(el, method, courseId) {
+    document.querySelectorAll('.payment-method-card').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    
+    const details = document.getElementById('course-payment-details');
+    if (method === 'card') {
+        details.innerHTML = `
+            <div class="form-group">
+                <label>Số thẻ</label>
+                <input type="text" placeholder="**** **** **** ****" class="search-input" style="width:100%">
+            </div>
+            <div class="form-row" style="margin-top:10px">
+                <div class="form-group">
+                    <label>Ngày hết hạn</label>
+                    <input type="text" placeholder="MM/YY" class="search-input" style="width:100%">
+                </div>
+                <div class="form-group">
+                    <label>CVV</label>
+                    <input type="password" placeholder="***" class="search-input" style="width:100%">
+                </div>
+            </div>
+        `;
+    } else {
+        details.innerHTML = `
+            <div style="text-align:center">
+                <p style="font-weight:600;margin-bottom:10px">Quét mã QR để thanh toán</p>
+                <div style="width:200px;height:200px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md);overflow:hidden">
+                    <img src="qr_payment.jpg" alt="QR Payment" style="width:100%;height:100%;object-fit:contain">
+                </div>
+                <p class="text-muted" style="font-size:0.85rem">Nội dung: <strong>DANGKY KH ${courseId}</strong></p>
+            </div>
+        `;
+    }
+}
+
+async function finalizeEnrollCourse(courseId, amount) {
     try {
         await API.post(`${CONFIG.ENDPOINTS.ENROLLMENTS}`, {
-            course: courseId
+            course: courseId,
+            deposit_amount: amount
         });
-        showToast('Đăng ký khóa học thành công! Vui lòng chờ trung tâm sắp xếp lớp.', 'success');
+        closeModal();
+        showToast('Đăng ký và xác nhận chuyển khoản thành công! Vui lòng chờ trung tâm sắp xếp lớp.', 'success');
         loadCourses();
     } catch (e) {
         const errorMsg = e.data?.error || e.data?.detail || (e.data ? JSON.stringify(e.data) : 'Đăng ký thất bại');

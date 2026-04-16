@@ -61,28 +61,26 @@ def send_attendance_email(student, classroom, session_date, status_display, sess
     return send_automated_email(subject, message, [student.user.email])
 
 
-def send_grade_email(student, classroom, enrollment):
-    """Gửi email thông báo khi có điểm mới"""
+def send_grade_email(student, classroom, test_score=None):
+    """Gửi email thông báo khi có điểm Test mới"""
     subject = f"[FourGuys] Cập nhật điểm số - Lớp {classroom.code}"
 
-    # Lấy các điểm đã có
+    # Lấy các điểm Test đã có
+    from apps.courses.models import TestScore
+    scores = TestScore.objects.filter(student=student, classroom=classroom).order_by('test_date')
+    
     grades_info = []
-    if enrollment.attendance_grade is not None:
-        grades_info.append(f"  - Điểm chuyên cần (10%): {enrollment.attendance_grade}")
-    if enrollment.midterm_grade is not None:
-        grades_info.append(f"  - Điểm giữa kỳ (20%): {enrollment.midterm_grade}")
-    if enrollment.final_test_grade is not None:
-        grades_info.append(f"  - Điểm cuối kỳ (70%): {enrollment.final_test_grade}")
+    for s in scores:
+        grades_info.append(f"  - {s.test_name} ({s.get_test_type_display()}): {s.score}/{s.max_score}")
 
     grades_text = "\n".join(grades_info) if grades_info else "  Chưa có điểm nào."
 
-    # Tổng kết nếu đủ điểm
+    # Tính điểm tổng kết
     final_text = ""
-    if enrollment.final_grade is not None:
-        final_text = (
-            f"\n📊 Điểm tổng kết: {enrollment.final_grade}/10 "
-            f"({enrollment.letter_grade})\n"
-        )
+    if scores.exists():
+        total = sum(s.score_10 for s in scores)
+        avg = round(total / scores.count(), 2)
+        final_text = f"\n📊 Điểm trung bình: {avg}/10\n"
 
     message = (
         f"Chào {student.user.first_name},\n\n"
@@ -93,3 +91,4 @@ def send_grade_email(student, classroom, enrollment):
         f"Trân trọng,\nĐội ngũ FourGuys."
     )
     return send_automated_email(subject, message, [student.user.email])
+

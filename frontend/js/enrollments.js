@@ -1,5 +1,11 @@
 /**
- * Enrollments Module - Đăng ký lớp học
+ * Enrollments Module - Đăng ký ghi danh
+ * 
+ * Nghiệp vụ: Đăng ký ghi danh → Nộp tiền (đặt cọc) → Admin duyệt
+ * 
+ * Trạng thái:
+ * - payment_status: unpaid → deposited → paid
+ * - approval_status: pending → approved / rejected
  */
 async function renderEnrollments() {
     const content = document.getElementById('content-area');
@@ -17,6 +23,18 @@ async function renderEnrollments() {
                     <option value="completed">Hoàn thành</option>
                     <option value="dropped">Đã nghỉ</option>
                     <option value="suspended">Tạm nghỉ</option>
+                </select>
+                <select class="filter-select" id="enrollment-payment-filter" onchange="loadEnrollments()">
+                    <option value="">Tất cả TT thanh toán</option>
+                    <option value="unpaid">Chưa thanh toán</option>
+                    <option value="deposited">Đã đặt cọc</option>
+                    <option value="paid">Đã thanh toán đủ</option>
+                </select>
+                <select class="filter-select" id="enrollment-approval-filter" onchange="loadEnrollments()">
+                    <option value="">Tất cả TT duyệt</option>
+                    <option value="pending">Chờ duyệt</option>
+                    <option value="approved">Đã duyệt</option>
+                    <option value="rejected">Từ chối</option>
                 </select>
             </div>
             ${hasRole('admin', 'staff') ? `
@@ -37,13 +55,15 @@ async function renderEnrollments() {
                             <th>Lớp học</th>
                             <th>Khóa học</th>
                             <th>Ngày ĐK</th>
+                            <th>Đặt cọc</th>
+                            <th>Thanh toán</th>
+                            <th>Duyệt</th>
                             <th>Trạng thái</th>
-                            <th>Điểm</th>
                             ${hasRole('admin', 'staff') ? '<th>Thao tác</th>' : ''}
                         </tr>
                     </thead>
                     <tbody id="enrollments-table-body">
-                        <tr><td colspan="8"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
+                        <tr><td colspan="10"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -57,16 +77,20 @@ async function renderEnrollments() {
 
 async function loadEnrollments(page = 1) {
     try {
-        const status = document.getElementById('enrollment-status-filter')?.value || '';
+        const statusFilter = document.getElementById('enrollment-status-filter')?.value || '';
+        const paymentFilter = document.getElementById('enrollment-payment-filter')?.value || '';
+        const approvalFilter = document.getElementById('enrollment-approval-filter')?.value || '';
         const params = { page };
-        if (status) params.status = status;
+        if (statusFilter) params.status = statusFilter;
+        if (paymentFilter) params.payment_status = paymentFilter;
+        if (approvalFilter) params.approval_status = approvalFilter;
 
         const data = await API.get(CONFIG.ENDPOINTS.ENROLLMENTS, params);
         const enrollments = data.results || data;
         const tbody = document.getElementById('enrollments-table-body');
 
         if (!enrollments.length) {
-            tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-icons-outlined">how_to_reg</span><h3>Chưa có đăng ký nào</h3></div></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><span class="material-icons-outlined">how_to_reg</span><h3>Chưa có đăng ký nào</h3></div></td></tr>';
             return;
         }
 
@@ -77,14 +101,23 @@ async function loadEnrollments(page = 1) {
                 <td>${e.classroom_name ? e.classroom_code + ' - ' + e.classroom_name : '<span class="text-muted"><i>Chưa xếp lớp</i></span>'}</td>
                 <td>${e.course_name || '-'}</td>
                 <td>${formatDate(e.enrollment_date)}</td>
+                <td style="font-weight:600">${e.deposit_amount ? formatCurrency(e.deposit_amount) : '-'}</td>
+                <td><span class="badge ${getStatusBadge(e.payment_status)}">${getStatusLabel(e.payment_status) || e.payment_status_display}</span></td>
+                <td><span class="badge ${getStatusBadge(e.approval_status)}">${getStatusLabel(e.approval_status) || e.approval_status_display}</span></td>
                 <td><span class="badge ${getStatusBadge(e.status)}">${getStatusLabel(e.status)}</span></td>
-                <td>${e.final_grade !== null ? e.final_grade : '-'}</td>
                 ${hasRole('admin', 'staff') ? `
                 <td>
                     <div class="btn-group">
                         <button class="btn btn-sm btn-secondary" onclick="editEnrollment(${e.id})" title="Sửa">
                             <span class="material-icons-outlined" style="font-size:1rem">edit</span>
                         </button>
+                        ${e.approval_status === 'pending' ? `
+                        <button class="btn btn-sm btn-success" onclick="approveEnrollment(${e.id})" title="Duyệt">
+                            <span class="material-icons-outlined" style="font-size:1rem">check_circle</span>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="rejectEnrollment(${e.id})" title="Từ chối">
+                            <span class="material-icons-outlined" style="font-size:1rem">cancel</span>
+                        </button>` : ''}
                         <button class="btn btn-sm btn-danger" onclick="deleteEnrollment(${e.id})" title="Xóa">
                             <span class="material-icons-outlined" style="font-size:1rem">delete</span>
                         </button>
@@ -97,8 +130,9 @@ async function loadEnrollments(page = 1) {
             document.getElementById('enrollments-pagination').innerHTML = renderPagination(data, 'loadEnrollments');
         }
     } catch (error) {
+        console.error("Enrollment load error:", error);
         document.getElementById('enrollments-table-body').innerHTML =
-            '<tr><td colspan="8"><p style="color:var(--danger-500);padding:20px">Lỗi tải dữ liệu</p></td></tr>';
+            `<tr><td colspan="10"><p style="color:var(--danger-500);padding:20px">Lỗi tải dữ liệu: ${error.message || JSON.stringify(error)}</p></td></tr>`;
     }
 }
 
@@ -163,10 +197,14 @@ async function openEnrollmentModal(enrollment = null) {
                     ${classOptions}
                 </select>
             </div>
+            <div class="form-group">
+                <label>Số tiền đặt cọc (Bắt buộc tối thiểu 30% học phí) *</label>
+                <input type="number" name="deposit_amount" value="${isEdit ? (enrollment.deposit_amount || 0) : 0}" step="1000" min="0" required placeholder="VD: 500000">
+            </div>
             ${isEdit ? `
             <div class="form-row">
                 <div class="form-group">
-                    <label>Trạng thái</label>
+                    <label>Trạng thái học</label>
                     <select name="status">
                         <option value="active" ${enrollment.status === 'active' ? 'selected' : ''}>Đang học</option>
                         <option value="completed" ${enrollment.status === 'completed' ? 'selected' : ''}>Hoàn thành</option>
@@ -177,22 +215,22 @@ async function openEnrollmentModal(enrollment = null) {
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Điểm chuyên cần (10%)</label>
-                    <input type="number" name="attendance_grade" value="${enrollment.attendance_grade || ''}" step="0.01" min="0" max="10" onchange="calculateFinalGrade()">
-                </div>
-                <div class="form-group">
-                    <label>Điểm giữa kỳ (20%)</label>
-                    <input type="number" name="midterm_grade" value="${enrollment.midterm_grade || ''}" step="0.01" min="0" max="10" onchange="calculateFinalGrade()">
+                    <label>Trạng thái thanh toán</label>
+                    <select name="payment_status">
+                        <option value="unpaid" ${enrollment.payment_status === 'unpaid' ? 'selected' : ''}>Chưa thanh toán</option>
+                        <option value="deposited" ${enrollment.payment_status === 'deposited' ? 'selected' : ''}>Đã đặt cọc</option>
+                        <option value="paid" ${enrollment.payment_status === 'paid' ? 'selected' : ''}>Đã thanh toán đủ</option>
+                    </select>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Điểm cuối kỳ (70%)</label>
-                    <input type="number" name="final_test_grade" value="${enrollment.final_test_grade || ''}" step="0.01" min="0" max="10" onchange="calculateFinalGrade()">
-                </div>
-                <div class="form-group">
-                    <label>Điểm tổng kết</label>
-                    <input type="text" id="final_grade_display" value="${enrollment.final_grade || '-'}" readonly style="background:var(--bg-light); font-weight:700; color:var(--primary-600)">
+                    <label>Trạng thái duyệt</label>
+                    <select name="approval_status">
+                        <option value="pending" ${enrollment.approval_status === 'pending' ? 'selected' : ''}>Chờ duyệt</option>
+                        <option value="approved" ${enrollment.approval_status === 'approved' ? 'selected' : ''}>Đã duyệt</option>
+                        <option value="rejected" ${enrollment.approval_status === 'rejected' ? 'selected' : ''}>Từ chối</option>
+                    </select>
                 </div>
             </div>` : ''}
             <div class="form-group">
@@ -252,20 +290,33 @@ async function deleteEnrollment(id) {
     }
 }
 
-function calculateFinalGrade() {
-    const aInput = document.querySelector('input[name="attendance_grade"]');
-    const mInput = document.querySelector('input[name="midterm_grade"]');
-    const fInput = document.querySelector('input[name="final_test_grade"]');
-    
-    if (!aInput || !mInput || !fInput) return;
+async function approveEnrollment(id) {
+    const confirmed = await showConfirm('Duyệt đăng ký', 'Xác nhận duyệt đăng ký này?');
+    if (!confirmed) return;
 
-    const a = parseFloat(aInput.value) || 0;
-    const m = parseFloat(mInput.value) || 0;
-    const f = parseFloat(fInput.value) || 0;
-    
-    const total = (a * 0.1) + (m * 0.2) + (f * 0.7);
-    const display = document.getElementById('final_grade_display');
-    if (display) {
-        display.value = total.toFixed(2);
+    try {
+        await API.post(`${CONFIG.ENDPOINTS.ENROLLMENTS}${id}/approve/`);
+        showToast('Đã duyệt đăng ký', 'success');
+        loadEnrollments();
+    } catch (error) {
+        showToast('Lỗi khi duyệt', 'error');
     }
+}
+
+async function rejectEnrollment(id) {
+    const confirmed = await showConfirm('Từ chối đăng ký', 'Xác nhận từ chối đăng ký này?');
+    if (!confirmed) return;
+
+    try {
+        await API.post(`${CONFIG.ENDPOINTS.ENROLLMENTS}${id}/reject/`);
+        showToast('Đã từ chối đăng ký', 'success');
+        loadEnrollments();
+    } catch (error) {
+        showToast('Lỗi khi từ chối', 'error');
+    }
+}
+
+function formatCurrency(amount) {
+    if (!amount) return '0 ₫';
+    return new Intl.NumberFormat('vi-VN').format(amount) + ' ₫';
 }

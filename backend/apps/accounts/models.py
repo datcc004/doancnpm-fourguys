@@ -15,9 +15,16 @@ class User(AbstractUser):
         ('student', 'Học viên'),
     ]
 
+    GENDER_CHOICES = [
+        ('male', 'Nam'),
+        ('female', 'Nữ'),
+        ('other', 'Khác'),
+    ]
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student', verbose_name='Vai trò')
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name='Số điện thoại')
     address = models.TextField(blank=True, null=True, verbose_name='Địa chỉ')
+    hometown = models.CharField(max_length=255, blank=True, null=True, verbose_name='Quê quán')
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True, verbose_name='Giới tính')
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name='Ảnh đại diện')
     date_of_birth = models.DateField(blank=True, null=True, verbose_name='Ngày sinh')
     created_at = models.DateTimeField(auto_now_add=True)

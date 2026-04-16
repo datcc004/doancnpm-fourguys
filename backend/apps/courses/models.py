@@ -1,5 +1,5 @@
 """
-Models - Quản lý khóa học, lớp học, đăng ký
+Models - Quản lý khóa học, lớp học, đăng ký, điểm Test
 """
 from django.db import models
 from apps.accounts.models import Teacher, Student
@@ -106,12 +106,27 @@ class ClassRoom(models.Model):
 
 
 class Enrollment(models.Model):
-    """Đăng ký lớp học"""
+    """Đăng ký lớp học
+    
+    Luồng: Đăng ký ghi danh → Nộp tiền (đặt cọc) → Admin duyệt
+    """
     STATUS_CHOICES = [
         ('active', 'Đang học'),
         ('completed', 'Hoàn thành'),
         ('dropped', 'Đã nghỉ'),
         ('suspended', 'Tạm nghỉ'),
+    ]
+
+    PAYMENT_STATUS_CHOICES = [
+        ('unpaid', 'Chưa thanh toán'),
+        ('deposited', 'Đã đặt cọc'),
+        ('paid', 'Đã thanh toán đủ'),
+    ]
+
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', 'Chờ duyệt'),
+        ('approved', 'Đã duyệt'),
+        ('rejected', 'Từ chối'),
     ]
 
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments', verbose_name='Học viên')
@@ -120,57 +135,64 @@ class Enrollment(models.Model):
                                    related_name='enrollments', verbose_name='Lớp học')
     enrollment_date = models.DateField(auto_now_add=True, verbose_name='Ngày đăng ký')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name='Trạng thái')
-    attendance_grade = models.DecimalField(max_digits=4, decimal_places=2, blank=True, null=True, verbose_name='Điểm chuyên cần (10%)')
-    midterm_grade = models.DecimalField(max_digits=4, decimal_places=2, blank=True, null=True, verbose_name='Điểm giữa kỳ (20%)')
-    final_test_grade = models.DecimalField(max_digits=4, decimal_places=2, blank=True, null=True, verbose_name='Điểm cuối kỳ (70%)')
+
+    # Đặt cọc & thanh toán
+    deposit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Số tiền đặt cọc')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='unpaid', verbose_name='Trạng thái thanh toán')
+    approval_status = models.CharField(max_length=20, choices=APPROVAL_STATUS_CHOICES, default='pending', verbose_name='Trạng thái duyệt')
+
     notes = models.TextField(blank=True, null=True, verbose_name='Ghi chú')
     created_at = models.DateTimeField(auto_now_add=True)
-
-    @property
-    def final_grade(self):
-        """Tính điểm tổng kết dựa trên trọng số: 10% - 20% - 70%"""
-        if not self.classroom: return None
-        if self.attendance_grade is not None and self.midterm_grade is not None and self.final_test_grade is not None:
-            a = float(self.attendance_grade)
-            m = float(self.midterm_grade)
-            f = float(self.final_test_grade)
-            total = (a * 0.1) + (m * 0.2) + (f * 0.7)
-            return round(total, 2)
-        return None
-
-    @property
-    def letter_grade(self):
-        """Chuyển đổi điểm hệ 10 sang hệ chữ (University style)"""
-        score = self.final_grade
-        if score is None: return "-"
-        if score >= 8.5: return "A"
-        if score >= 7.8: return "B+"
-        if score >= 7.0: return "B"
-        if score >= 6.3: return "C+"
-        if score >= 5.5: return "C"
-        if score >= 4.8: return "D+"
-        if score >= 4.0: return "D"
-        return "F"
-    
-    @property
-    def gpa4_score(self):
-        """Chuyển đổi điểm hệ 10 sang hệ 4 (University style)"""
-        score = self.final_grade
-        if score is None: return "-"
-        if score >= 8.5: return 4.0
-        if score >= 7.8: return 3.5
-        if score >= 7.0: return 3.0
-        if score >= 6.3: return 2.5
-        if score >= 5.5: return 2.0
-        if score >= 4.8: return 1.5
-        if score >= 4.0: return 1.0
-        return 0.0
 
     class Meta:
         db_table = 'enrollments'
         verbose_name = 'Đăng ký'
         verbose_name_plural = 'Đăng ký'
-        # unique_together = ['student', 'course'] # Bỏ để sửa lỗi dữ liệu cũ bị trùng, xử lý logic ở Serializer
 
     def __str__(self):
         return f"{self.student} - {self.classroom}"
+
+
+class TestScore(models.Model):
+    """Điểm Test đánh giá trình độ học viên
+    
+    - Không sử dụng điểm chuyên cần (attendance grade)
+    - Chỉ dùng điểm Test: giữa kỳ, cuối kỳ, quiz, etc.
+    - Điểm tổng kết = TB các bài Test (hoặc theo trọng số midterm/final)
+    """
+    TEST_TYPE_CHOICES = [
+        ('midterm', 'Giữa kỳ'),
+        ('final', 'Cuối kỳ'),
+        ('quiz', 'Kiểm tra ngắn'),
+        ('oral', 'Kiểm tra miệng'),
+        ('practice', 'Bài tập thực hành'),
+        ('other', 'Khác'),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='test_scores', verbose_name='Học viên')
+    classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name='test_scores', verbose_name='Lớp học')
+    test_name = models.CharField(max_length=200, verbose_name='Tên bài Test')
+    test_type = models.CharField(max_length=20, choices=TEST_TYPE_CHOICES, default='quiz', verbose_name='Loại bài Test')
+    score = models.DecimalField(max_digits=5, decimal_places=2, verbose_name='Điểm')
+    max_score = models.DecimalField(max_digits=5, decimal_places=2, default=10, verbose_name='Điểm tối đa')
+    test_date = models.DateField(verbose_name='Ngày thi/kiểm tra')
+    notes = models.TextField(blank=True, null=True, verbose_name='Ghi chú')
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, verbose_name='Người nhập')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'test_scores'
+        verbose_name = 'Điểm Test'
+        verbose_name_plural = 'Điểm Test'
+        ordering = ['test_date']
+
+    def __str__(self):
+        return f"{self.student} - {self.test_name} - {self.score}/{self.max_score}"
+
+    @property
+    def score_10(self):
+        """Quy đổi điểm về hệ 10"""
+        if self.max_score and self.max_score > 0:
+            return round(float(self.score) / float(self.max_score) * 10, 2)
+        return 0

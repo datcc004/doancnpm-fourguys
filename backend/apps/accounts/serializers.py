@@ -12,10 +12,11 @@ class UserSerializer(serializers.ModelSerializer):
     student_id = serializers.SerializerMethodField()
     teacher_id = serializers.SerializerMethodField()
 
+    gender_display = serializers.CharField(source='get_gender_display', read_only=True)
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name',
-                  'role', 'phone', 'address', 'date_of_birth', 'avatar',
+                  'role', 'phone', 'address', 'hometown', 'gender', 'gender_display', 'date_of_birth', 'avatar',
                   'student_id', 'teacher_id',
                   'is_active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']

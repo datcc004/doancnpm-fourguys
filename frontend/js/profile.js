@@ -55,12 +55,31 @@ async function renderProfile() {
                         <label>Email</label>
                         <input type="email" name="email" value="${u.email || ''}">
                     </div>
-                    <div class="form-group">
-                        <label>Số điện thoại</label>
-                        <input type="text" name="phone" value="${u.phone || ''}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Số điện thoại</label>
+                            <input type="text" name="phone" value="${u.phone || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Giới tính</label>
+                            <select name="gender" class="form-control">
+                                <option value="">Chưa chọn</option>
+                                <option value="male" ${u.gender === 'male' ? 'selected' : ''}>Nam</option>
+                                <option value="female" ${u.gender === 'female' ? 'selected' : ''}>Nữ</option>
+                                <option value="other" ${u.gender === 'other' ? 'selected' : ''}>Khác</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Ngày sinh</label>
+                            <input type="date" name="date_of_birth" value="${u.date_of_birth || ''}">
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label>Địa chỉ</label>
+                        <label>Quê quán (Nơi sinh)</label>
+                        <input type="text" name="hometown" value="${u.hometown || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Địa chỉ thường trú</label>
                         <input type="text" name="address" value="${u.address || ''}">
                     </div>
                     <button type="submit" class="btn btn-primary">Cập nhật thông tin</button>
