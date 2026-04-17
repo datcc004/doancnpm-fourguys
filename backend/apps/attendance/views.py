@@ -2,20 +2,25 @@
 Views - API endpoints cho attendance
 Nghiệp vụ: Chọn lớp → Chọn buổi học → Điểm danh học viên
 """
-from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from datetime import date
+
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 
-from .models import AttendanceSession, AttendanceRecord
+from .models import AttendanceSession, AttendanceRecord, TeacherAttendance
 from .serializers import (
     AttendanceSessionSerializer, AttendanceSessionListSerializer,
-    AttendanceRecordSerializer, BulkAttendanceSerializer
+    AttendanceRecordSerializer, BulkAttendanceSerializer,
+    TeacherAttendanceSerializer,
 )
-from apps.accounts.permissions import IsStaffOrAdmin, IsTeacher
-from apps.courses.models import ClassRoom, Enrollment
+from apps.courses.models import ClassRoom
 
 
 class AttendanceSessionViewSet(viewsets.ModelViewSet):
@@ -219,3 +224,140 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['session', 'student', 'status']
+
+
+def _parse_work_date(value):
+    if value is None or value == '':
+        return timezone.localdate()
+    if isinstance(value, date):
+        return value
+    parsed = parse_date(str(value))
+    return parsed if parsed else timezone.localdate()
+
+
+class TeacherAttendanceViewSet(viewsets.ModelViewSet):
+    """API chấm công giảng viên (theo ngày).
+
+    - Admin/Staff: xem và chỉnh sửa toàn bộ.
+    - Giảng viên: chỉ bản ghi của mình; tạo/sửa không đổi được ``teacher``.
+    - Xóa: chỉ admin/staff.
+    """
+    serializer_class = TeacherAttendanceSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['teacher', 'work_date', 'status']
+    ordering_fields = ['work_date', 'created_at', 'check_in']
+    ordering = ['-work_date', 'id']
+    search_fields = ['teacher__teacher_code', 'teacher__user__first_name', 'teacher__user__last_name']
+
+    def get_queryset(self):
+        qs = TeacherAttendance.objects.select_related('teacher__user', 'recorded_by').all()
+        user = self.request.user
+        role = getattr(user, 'role', None)
+        if role in ('admin', 'staff'):
+            return qs
+        if role == 'teacher':
+            teacher = getattr(user, 'teacher_profile', None)
+            if teacher:
+                return qs.filter(teacher=teacher)
+        return qs.none()
+
+    def create(self, request, *args, **kwargs):
+        if request.user.role not in ('admin', 'staff', 'teacher'):
+            return Response(
+                {'detail': 'Không có quyền tạo chấm công'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.role == 'teacher':
+            teacher = getattr(user, 'teacher_profile', None)
+            if not teacher:
+                raise ValidationError({'detail': 'Tài khoản không có hồ sơ giảng viên'})
+            serializer.save(teacher=teacher, recorded_by=user)
+        else:
+            serializer.save(recorded_by=user)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role not in ('admin', 'staff'):
+            return Response(
+                {'detail': 'Chỉ quản trị/nhân viên được xóa bản ghi chấm công'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=['post'], url_path='clock-in')
+    def clock_in(self, request):
+        """Giảng viên chấm giờ vào (tạo hoặc cập nhật bản ghi ngày hiện tại)."""
+        if request.user.role != 'teacher':
+            return Response({'detail': 'Chỉ giảng viên được chấm vào'}, status=status.HTTP_403_FORBIDDEN)
+        teacher = getattr(request.user, 'teacher_profile', None)
+        if not teacher:
+            return Response({'detail': 'Không có hồ sơ giảng viên'}, status=status.HTTP_400_BAD_REQUEST)
+
+        work_date = _parse_work_date(request.data.get('work_date'))
+        now = timezone.now()
+        obj, _created = TeacherAttendance.objects.get_or_create(
+            teacher=teacher,
+            work_date=work_date,
+            defaults={
+                'check_in': now,
+                'status': 'present',
+                'recorded_by': request.user,
+            },
+        )
+        if obj.check_in is None:
+            obj.check_in = now
+            obj.recorded_by = request.user
+            obj.save(update_fields=['check_in', 'recorded_by', 'updated_at'])
+        return Response(TeacherAttendanceSerializer(obj).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='clock-out')
+    def clock_out(self, request):
+        """Giảng viên chấm giờ ra."""
+        if request.user.role != 'teacher':
+            return Response({'detail': 'Chỉ giảng viên được chấm ra'}, status=status.HTTP_403_FORBIDDEN)
+        teacher = getattr(request.user, 'teacher_profile', None)
+        if not teacher:
+            return Response({'detail': 'Không có hồ sơ giảng viên'}, status=status.HTTP_400_BAD_REQUEST)
+
+        work_date = _parse_work_date(request.data.get('work_date'))
+        try:
+            obj = TeacherAttendance.objects.get(teacher=teacher, work_date=work_date)
+        except TeacherAttendance.DoesNotExist:
+            return Response(
+                {'detail': 'Chưa có bản ghi chấm công trong ngày, hãy chấm vào trước'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        obj.check_out = timezone.now()
+        obj.save(update_fields=['check_out', 'updated_at'])
+        return Response(TeacherAttendanceSerializer(obj).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='summary')
+    def summary(self, request):
+        """Thống kê nhanh theo khoảng ngày (admin/staff)."""
+        if request.user.role not in ('admin', 'staff'):
+            return Response({'detail': 'Không có quyền'}, status=status.HTTP_403_FORBIDDEN)
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+        teacher_id = request.query_params.get('teacher')
+        qs = TeacherAttendance.objects.all()
+        if teacher_id:
+            qs = qs.filter(teacher_id=teacher_id)
+        if from_date:
+            d = parse_date(from_date)
+            if d:
+                qs = qs.filter(work_date__gte=d)
+        if to_date:
+            d = parse_date(to_date)
+            if d:
+                qs = qs.filter(work_date__lte=d)
+        total = qs.count()
+        by_status = {}
+        for code, label in TeacherAttendance.STATUS_CHOICES:
+            by_status[code] = qs.filter(status=code).count()
+        return Response({
+            'total_records': total,
+            'by_status': by_status,
+        })

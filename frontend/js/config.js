@@ -31,6 +31,7 @@ const CONFIG = {
         // Attendance
         ATTENDANCE_SESSIONS: '/attendance/sessions/',
         ATTENDANCE_RECORDS: '/attendance/records/',
+        TEACHER_ATTENDANCE: '/attendance/teacher-attendance/',
 
         // Test Scores
         TEST_SCORES: '/courses/scores/',
