@@ -68,6 +68,15 @@ const CONFIG = {
         rejected: 'Từ chối',
     },
 
+    // Chấm công giảng viên (TeacherAttendance.status)
+    TEACHER_ATTENDANCE_LABELS: {
+        present: 'Đúng giờ',
+        late: 'Đi muộn',
+        absent: 'Vắng',
+        leave: 'Nghỉ có phép',
+        leave_unpaid: 'Nghỉ không phép',
+    },
+
     // Language labels
     LANGUAGE_LABELS: {
         english: 'Tiếng Anh',

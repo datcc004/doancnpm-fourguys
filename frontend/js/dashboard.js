@@ -107,6 +107,10 @@ async function renderDashboard() {
                         <span class="material-icons-outlined">fact_check</span>
                         <span>Điểm danh</span>
                     </button>
+                    <button class="quick-action-btn green" onclick="navigate('teacher-attendance')">
+                        <span class="material-icons-outlined">schedule</span>
+                        <span>Chấm công GV</span>
+                    </button>
                     <button class="quick-action-btn indigo" onclick="navigate('grades')">
                         <span class="material-icons-outlined">trending_up</span>
                         <span>Nhập điểm</span>
@@ -447,6 +451,10 @@ async function renderDashboard() {
                 <div class="sp-action-btn" onclick="navigate('attendance')">
                     <div class="icon-wrapper"><span class="material-icons-outlined">fact_check</span></div>
                     <span>Điểm danh học viên</span>
+                </div>
+                <div class="sp-action-btn" onclick="navigate('teacher-attendance')">
+                    <div class="icon-wrapper"><span class="material-icons-outlined">schedule</span></div>
+                    <span>Chấm công giảng viên</span>
                 </div>
                 <div class="sp-action-btn" onclick="navigate('grades')">
                     <div class="icon-wrapper"><span class="material-icons-outlined">edit_note</span></div>

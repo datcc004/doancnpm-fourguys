@@ -10,10 +10,14 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
+from django_filters.rest_framework import DjangoFilterBackend
+
+from .filters import TeacherAttendanceFilter
 from .models import AttendanceSession, AttendanceRecord, TeacherAttendance
 from .serializers import (
     AttendanceSessionSerializer, AttendanceSessionListSerializer,
@@ -241,10 +245,13 @@ class TeacherAttendanceViewSet(viewsets.ModelViewSet):
     - Admin/Staff: xem và chỉnh sửa toàn bộ.
     - Giảng viên: chỉ bản ghi của mình; tạo/sửa không đổi được ``teacher``.
     - Xóa: chỉ admin/staff.
+
+    Query: ``teacher``, ``status``, ``work_date``, ``work_date_after``, ``work_date_before``.
     """
     serializer_class = TeacherAttendanceSerializer
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['teacher', 'work_date', 'status']
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = TeacherAttendanceFilter
     ordering_fields = ['work_date', 'created_at', 'check_in']
     ordering = ['-work_date', 'id']
     search_fields = ['teacher__teacher_code', 'teacher__user__first_name', 'teacher__user__last_name']
