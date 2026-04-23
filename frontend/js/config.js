@@ -31,6 +31,7 @@ const CONFIG = {
         // Attendance
         ATTENDANCE_SESSIONS: '/attendance/sessions/',
         ATTENDANCE_RECORDS: '/attendance/records/',
+        TEACHER_ATTENDANCE: '/attendance/teacher-attendance/',
 
         // Test Scores
         TEST_SCORES: '/courses/scores/',
@@ -65,6 +66,15 @@ const CONFIG = {
         deposited: 'Đã đặt cọc',
         approved: 'Đã duyệt',
         rejected: 'Từ chối',
+    },
+
+    // Chấm công giảng viên (TeacherAttendance.status)
+    TEACHER_ATTENDANCE_LABELS: {
+        present: 'Đúng giờ',
+        late: 'Đi muộn',
+        absent: 'Vắng',
+        leave: 'Nghỉ có phép',
+        leave_unpaid: 'Nghỉ không phép',
     },
 
     // Language labels

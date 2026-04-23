@@ -50,7 +50,23 @@ async function renderAttendance() {
         `<option value="${c.id}">${c.code} - ${c.name}</option>`
     ).join('');
 
+    const teacherBanner = hasRole('teacher')
+        ? `
+        <div class="card" style="margin-bottom:16px;border-left:4px solid var(--primary-500)">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:4px 0">
+                <div>
+                    <strong>Chấm công giảng viên</strong>
+                    <p style="margin:4px 0 0;font-size:0.9rem;color:var(--text-secondary)">Chấm vào / ra và xem lịch sử theo ngày</p>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="navigate('teacher-attendance')">
+                    <span class="material-icons-outlined">schedule</span> Mở chấm công
+                </button>
+            </div>
+        </div>`
+        : '';
+
     content.innerHTML = `
+    ${teacherBanner}
     <div class="att-page">
         <!-- STEP 1: Chọn lớp -->
         <div class="att-toolbar card">

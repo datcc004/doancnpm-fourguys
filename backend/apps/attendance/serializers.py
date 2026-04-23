@@ -5,7 +5,7 @@ Nghiệp vụ: Chọn buổi → Điểm danh
 - Nếu absent → absence_reason + is_excused
 """
 from rest_framework import serializers
-from .models import AttendanceSession, AttendanceRecord
+from .models import AttendanceSession, AttendanceRecord, TeacherAttendance
 
 
 class AttendanceRecordSerializer(serializers.ModelSerializer):
@@ -125,3 +125,70 @@ class BulkAttendanceSerializer(serializers.Serializer):
     records = serializers.ListField(
         child=serializers.DictField()
     )
+
+
+class TeacherAttendanceSerializer(serializers.ModelSerializer):
+    """Chấm công giảng viên (theo ngày)."""
+    teacher_name = serializers.SerializerMethodField()
+    teacher_code = serializers.CharField(source='teacher.teacher_code', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    recorded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TeacherAttendance
+        fields = [
+            'id',
+            'teacher',
+            'teacher_name',
+            'teacher_code',
+            'work_date',
+            'check_in',
+            'check_out',
+            'status',
+            'status_display',
+            'absence_reason',
+            'notes',
+            'recorded_by',
+            'recorded_by_name',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'teacher_name',
+            'teacher_code',
+            'status_display',
+            'recorded_by_name',
+            'created_at',
+            'updated_at',
+        ]
+        extra_kwargs = {
+            'teacher': {'required': False},
+            'recorded_by': {'required': False, 'allow_null': True},
+        }
+
+    def get_teacher_name(self, obj):
+        return obj.teacher.user.get_full_name()
+
+    def get_recorded_by_name(self, obj):
+        if obj.recorded_by_id:
+            return obj.recorded_by.get_full_name() or obj.recorded_by.username
+        return None
+
+    def validate(self, data):
+        request = self.context.get('request')
+        role = getattr(request.user, 'role', None) if request else None
+        if role in ('admin', 'staff') and self.instance is None and not data.get('teacher'):
+            raise serializers.ValidationError({'teacher': 'Bắt buộc chọn giảng viên'})
+        status_val = data.get('status', getattr(self.instance, 'status', None) if self.instance else 'present')
+        if status_val in ('absent', 'leave', 'leave_unpaid'):
+            if not data.get('absence_reason') and not (self.instance and self.instance.absence_reason):
+                data['absence_reason'] = data.get('absence_reason') or 'Không rõ'
+        return data
+
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        if request and getattr(request.user, 'role', None) == 'teacher':
+            validated_data.pop('teacher', None)
+            validated_data.pop('recorded_by', None)
+        return super().update(instance, validated_data)

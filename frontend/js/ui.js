@@ -52,6 +52,7 @@ function navigate(page, params = null) {
         enrollments: 'Đăng ký Lớp học',
         payments: 'Quản lý Học phí',
         attendance: 'Điểm danh',
+        'teacher-attendance': 'Chấm công giảng viên',
         grades: 'Kết quả học tập',
         schedule: 'Lịch học & Thời khóa biểu',
         profile: 'Thông tin cá nhân',
@@ -76,6 +77,7 @@ function navigate(page, params = null) {
             case 'enrollments': renderEnrollments(window.navParams); break;
             case 'payments': renderPayments(window.navParams); break;
             case 'attendance': renderAttendance(window.navParams); break;
+            case 'teacher-attendance': renderTeacherAttendance(window.navParams); break;
             case 'grades': renderGrades(window.navParams); break;
             case 'schedule': 
                 currentScheduleOffset = 0; // Reset về tuần hiện tại khi bấm menu
@@ -211,6 +213,7 @@ function getStatusBadge(status) {
         unpaid: 'badge-warning',
         absent: 'badge-danger', dropped: 'badge-danger', overdue: 'badge-danger', cancelled: 'badge-danger',
         rejected: 'badge-danger',
+        leave: 'badge-info', leave_unpaid: 'badge-warning',
         excused: 'badge-neutral', refunded: 'badge-neutral',
     };
     return badges[status] || 'badge-neutral';
