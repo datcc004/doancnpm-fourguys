@@ -196,3 +196,80 @@ class TestScore(models.Model):
         if self.max_score and self.max_score > 0:
             return round(float(self.score) / float(self.max_score) * 10, 2)
         return 0
+
+
+class CourseMaterial(models.Model):
+    """Tài liệu bài giảng - Giảng viên upload, Học viên tải về"""
+    FILE_TYPE_CHOICES = [
+        ('pdf', 'PDF'),
+        ('doc', 'Word'),
+        ('xls', 'Excel'),
+        ('ppt', 'PowerPoint'),
+        ('image', 'Hình ảnh'),
+        ('video', 'Video'),
+        ('audio', 'Âm thanh'),
+        ('archive', 'File nén'),
+        ('other', 'Khác'),
+    ]
+
+    classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name='materials', verbose_name='Lớp học')
+    title = models.CharField(max_length=255, verbose_name='Tiêu đề')
+    description = models.TextField(blank=True, null=True, verbose_name='Mô tả')
+    file = models.FileField(upload_to='materials/%Y/%m/', verbose_name='Tệp đính kèm')
+    file_type = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES, default='other', verbose_name='Loại tệp')
+    file_size = models.BigIntegerField(default=0, verbose_name='Kích thước (bytes)')
+    original_filename = models.CharField(max_length=255, blank=True, verbose_name='Tên file gốc')
+    download_count = models.IntegerField(default=0, verbose_name='Lượt tải')
+    uploaded_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, verbose_name='Người tải lên')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'course_materials'
+        verbose_name = 'Tài liệu bài giảng'
+        verbose_name_plural = 'Tài liệu bài giảng'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} - {self.classroom.code}"
+
+    def save(self, *args, **kwargs):
+        """Tự động detect loại file và kích thước"""
+        if self.file:
+            # Detect file type from extension
+            import os
+            ext = os.path.splitext(self.file.name)[1].lower()
+            ext_map = {
+                '.pdf': 'pdf',
+                '.doc': 'doc', '.docx': 'doc',
+                '.xls': 'xls', '.xlsx': 'xls',
+                '.ppt': 'ppt', '.pptx': 'ppt',
+                '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image', '.bmp': 'image', '.webp': 'image',
+                '.mp4': 'video', '.avi': 'video', '.mov': 'video', '.mkv': 'video',
+                '.mp3': 'audio', '.wav': 'audio', '.ogg': 'audio',
+                '.zip': 'archive', '.rar': 'archive', '.7z': 'archive', '.tar': 'archive', '.gz': 'archive',
+            }
+            self.file_type = ext_map.get(ext, 'other')
+
+            # Save original filename
+            if not self.original_filename:
+                self.original_filename = os.path.basename(self.file.name)
+
+            # File size
+            try:
+                self.file_size = self.file.size
+            except Exception:
+                pass
+
+        super().save(*args, **kwargs)
+
+    @property
+    def file_size_display(self):
+        """Hiển thị kích thước file dạng đọc được"""
+        if self.file_size < 1024:
+            return f"{self.file_size} B"
+        elif self.file_size < 1024 * 1024:
+            return f"{self.file_size / 1024:.1f} KB"
+        elif self.file_size < 1024 * 1024 * 1024:
+            return f"{self.file_size / (1024 * 1024):.1f} MB"
+        return f"{self.file_size / (1024 * 1024 * 1024):.1f} GB"

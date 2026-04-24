@@ -8,10 +8,11 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q, Avg
 from django.db import transaction
 
-from .models import Course, ClassRoom, Enrollment, TestScore
+from .models import Course, ClassRoom, Enrollment, TestScore, CourseMaterial
 from .serializers import (
     CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
-    EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer
+    EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer,
+    CourseMaterialSerializer
 )
 from apps.accounts.permissions import IsStaffOrAdmin
 
@@ -529,4 +530,98 @@ class TestScoreViewSet(viewsets.ModelViewSet):
         return Response({
             'test_names': list(test_names),
             'students': students_data,
+        })
+
+
+class CourseMaterialViewSet(viewsets.ModelViewSet):
+    """CRUD cho CourseMaterial - Tài liệu bài giảng
+    
+    - Giảng viên: upload/sửa/xóa tài liệu cho lớp mình dạy
+    - Học viên: xem/tải tài liệu của lớp mình đang học
+    - Admin/Staff: toàn quyền
+    """
+    serializer_class = CourseMaterialSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['classroom', 'file_type']
+    search_fields = ['title', 'description', 'original_filename']
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = CourseMaterial.objects.select_related(
+            'classroom__course', 'classroom__teacher__user', 'uploaded_by'
+        ).all()
+
+        # Admin/Staff: xem tất cả
+        if user.role in ['admin', 'staff']:
+            return queryset
+
+        # Giảng viên: chỉ xem tài liệu của lớp mình dạy
+        if user.role == 'teacher' and hasattr(user, 'teacher_profile'):
+            return queryset.filter(classroom__teacher=user.teacher_profile)
+
+        # Học viên: chỉ xem tài liệu của lớp mình đang học
+        if user.role == 'student' and hasattr(user, 'student_profile'):
+            enrolled_classes = Enrollment.objects.filter(
+                student=user.student_profile,
+                status__in=['active', 'completed']
+            ).values_list('classroom_id', flat=True)
+            return queryset.filter(classroom_id__in=enrolled_classes)
+
+        return queryset.none()
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'download']:
+            return [IsAuthenticated()]
+        # Upload/sửa/xóa: chỉ GV hoặc Admin/Staff
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            from apps.accounts.permissions import IsStaffOrAdmin, IsTeacher
+            return [IsAuthenticated(), (IsStaffOrAdmin | IsTeacher)()]
+        return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def perform_create(self, serializer):
+        """Gán người upload và kiểm tra quyền trên lớp"""
+        classroom = serializer.validated_data.get('classroom')
+        user = self.request.user
+
+        # Nếu là giảng viên, kiểm tra có đang dạy lớp này không
+        if user.role == 'teacher' and hasattr(user, 'teacher_profile'):
+            if classroom.teacher != user.teacher_profile:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied('Bạn không phải giảng viên phụ trách lớp này.')
+
+        serializer.save(uploaded_by=user)
+
+    def perform_update(self, serializer):
+        """Kiểm tra quyền sửa: chỉ người upload hoặc admin"""
+        user = self.request.user
+        obj = self.get_object()
+
+        if user.role == 'teacher' and obj.uploaded_by != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Bạn chỉ có thể sửa tài liệu do chính mình tải lên.')
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Kiểm tra quyền xóa: chỉ người upload hoặc admin"""
+        user = self.request.user
+
+        if user.role == 'teacher' and instance.uploaded_by != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Bạn chỉ có thể xóa tài liệu do chính mình tải lên.')
+
+        # Xóa file vật lý
+        if instance.file:
+            instance.file.delete(save=False)
+        instance.delete()
+
+    @action(detail=True, methods=['post'])
+    def download(self, request, pk=None):
+        """Tăng lượt tải khi học viên tải file"""
+        material = self.get_object()
+        material.download_count += 1
+        material.save(update_fields=['download_count'])
+        return Response({
+            'file_url': request.build_absolute_uri(material.file.url),
+            'download_count': material.download_count
         })

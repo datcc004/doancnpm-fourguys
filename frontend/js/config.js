@@ -35,6 +35,9 @@ const CONFIG = {
 
         // Test Scores
         TEST_SCORES: '/courses/scores/',
+
+        // Materials
+        MATERIALS: '/courses/materials/',
     },
 
     // Role labels

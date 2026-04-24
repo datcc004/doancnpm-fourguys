@@ -1305,3 +1305,263 @@
 @media (max-width: 1200px) {
     .table-excel { min-width: 1100px; }
 }
+
+/* ===================================================
+   Materials Page - Tài liệu bài giảng
+   =================================================== */
+
+/* Empty State */
+.materials-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+}
+
+.materials-empty-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.materials-empty-icon .material-icons-outlined {
+    font-size: 2.5rem;
+    color: var(--primary-400);
+}
+
+.materials-empty-state h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.materials-empty-state p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    max-width: 400px;
+}
+
+/* Header */
+.materials-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 16px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+}
+
+.materials-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.materials-header-info h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.materials-header-info h3 .material-icons-outlined {
+    font-size: 1.3rem;
+    color: var(--primary-500);
+}
+
+/* Materials Grid */
+.materials-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Material Card */
+.material-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    transition: all var(--transition-normal);
+}
+
+.material-card:hover {
+    border-color: var(--primary-200);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.material-card-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.material-card-icon .material-icons-outlined {
+    font-size: 1.6rem;
+}
+
+.material-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.material-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.material-card-desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.material-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.material-card-meta span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.material-card-meta .material-icons-outlined {
+    font-size: 0.85rem;
+}
+
+.material-card-filename {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--primary-500);
+    margin-top: 6px;
+    font-weight: 500;
+}
+
+.material-card-filename .material-icons-outlined {
+    font-size: 0.85rem;
+}
+
+.material-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Upload Drop Zone */
+.upload-drop-zone {
+    position: relative;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 30px 20px;
+    text-align: center;
+    transition: all var(--transition-normal);
+    cursor: pointer;
+    background: var(--gray-50);
+}
+
+.upload-drop-zone:hover {
+    border-color: var(--primary-400);
+    background: var(--primary-50);
+}
+
+.upload-drop-zone.drag-over {
+    border-color: var(--primary-500);
+    background: var(--primary-50);
+    transform: scale(1.01);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+
+.upload-drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.upload-drop-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+.upload-file-preview {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    pointer-events: auto;
+    position: relative;
+    z-index: 3;
+}
+
+.upload-file-preview .material-icons-outlined:first-child {
+    font-size: 2rem;
+}
+
+/* Responsive Materials */
+@media (max-width: 768px) {
+    .material-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .material-card-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .material-card-meta {
+        gap: 8px;
+    }
+
+    .materials-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}

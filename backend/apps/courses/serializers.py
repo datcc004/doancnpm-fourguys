@@ -2,7 +2,7 @@
 Serializers - Chuyển đổi dữ liệu cho API courses
 """
 from rest_framework import serializers
-from .models import Course, ClassRoom, Enrollment, TestScore
+from .models import Course, ClassRoom, Enrollment, TestScore, CourseMaterial
 from apps.accounts.serializers import StudentSerializer, TeacherSerializer
 
 
@@ -398,3 +398,37 @@ class BulkTestScoreSerializer(serializers.Serializer):
     scores = serializers.ListField(
         child=serializers.DictField()
     )
+
+
+class CourseMaterialSerializer(serializers.ModelSerializer):
+    """Serializer cho CourseMaterial - Tài liệu bài giảng"""
+    uploaded_by_name = serializers.SerializerMethodField()
+    classroom_code = serializers.CharField(source='classroom.code', read_only=True)
+    classroom_name = serializers.CharField(source='classroom.name', read_only=True)
+    file_url = serializers.SerializerMethodField()
+    file_size_display = serializers.ReadOnlyField()
+    file_type_display = serializers.CharField(source='get_file_type_display', read_only=True)
+
+    class Meta:
+        model = CourseMaterial
+        fields = ['id', 'classroom', 'classroom_code', 'classroom_name',
+                  'title', 'description', 'file', 'file_url',
+                  'file_type', 'file_type_display', 'file_size', 'file_size_display',
+                  'original_filename', 'download_count',
+                  'uploaded_by', 'uploaded_by_name',
+                  'created_at', 'updated_at']
+        read_only_fields = ['id', 'file_type', 'file_size', 'original_filename',
+                            'download_count', 'uploaded_by', 'created_at', 'updated_at']
+
+    def get_uploaded_by_name(self, obj):
+        if obj.uploaded_by:
+            return obj.uploaded_by.get_full_name() or obj.uploaded_by.username
+        return '-'
+
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        elif obj.file:
+            return obj.file.url
+        return None
