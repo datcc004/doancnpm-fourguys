@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'apps.courses',
     'apps.payments',
     'apps.attendance',
+    'apps.chat',
 ]
 
 # ---- Middleware ----
