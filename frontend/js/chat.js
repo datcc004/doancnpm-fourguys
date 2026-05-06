@@ -8,10 +8,17 @@ let chatState = {
     conversations: [],
     users: [],
     messages: [],
+    aiMessages: [],
     unreadCount: 0,
     search: '',
     pollTimer: null,
     messageTimer: null,
+};
+
+const CHAT_AI_USER = {
+    full_name: 'AI Assistant',
+    role: 'Gemini',
+    is_ai: true,
 };
 
 function initChatWidget() {
@@ -41,6 +48,7 @@ function destroyChatWidget() {
         conversations: [],
         users: [],
         messages: [],
+        aiMessages: [],
         unreadCount: 0,
         search: '',
         pollTimer: null,
@@ -80,6 +88,9 @@ function createChatWidget() {
                 <button id="chat-tab-users" class="chat-tab" onclick="switchChatTab('users')">
                     Người dùng
                 </button>
+                <button id="chat-tab-ai" class="chat-tab" onclick="switchChatTab('ai')">
+                    AI
+                </button>
             </div>
             <div class="chat-search">
                 <span class="material-icons-outlined">search</span>
@@ -114,14 +125,22 @@ function toggleChatWidget(forceOpen = null) {
     panel.classList.toggle('hidden', !chatState.isOpen);
 
     if (chatState.isOpen) {
-        loadChatConversations();
-        if (chatState.activeConversationId) loadChatMessages(chatState.activeConversationId);
+        if (chatState.activeTab === 'ai') {
+            renderChatThreadHeader(CHAT_AI_USER);
+            renderAiMessages();
+        } else {
+            loadChatConversations();
+            if (chatState.activeConversationId) loadChatMessages(chatState.activeConversationId);
+        }
     }
 }
 
 function refreshChatWidget() {
     loadChatUnreadCount();
-    if (chatState.activeTab === 'users') {
+    if (chatState.activeTab === 'ai') {
+        renderAiMessages(false);
+        return;
+    } else if (chatState.activeTab === 'users') {
         loadChatUsers();
     } else {
         loadChatConversations();
@@ -136,14 +155,23 @@ function switchChatTab(tab) {
 
     document.getElementById('chat-tab-conversations')?.classList.toggle('active', tab === 'conversations');
     document.getElementById('chat-tab-users')?.classList.toggle('active', tab === 'users');
-    document.getElementById('chat-thread')?.classList.add('hidden');
-    document.getElementById('chat-list')?.classList.remove('hidden');
+    document.getElementById('chat-tab-ai')?.classList.toggle('active', tab === 'ai');
     document.getElementById('chat-search-input').value = '';
+    document.querySelector('.chat-search')?.classList.toggle('hidden', tab === 'ai');
     chatState.search = '';
 
-    if (tab === 'users') {
+    if (tab === 'ai') {
+        document.getElementById('chat-list')?.classList.add('hidden');
+        document.getElementById('chat-thread')?.classList.remove('hidden');
+        renderChatThreadHeader(CHAT_AI_USER);
+        renderAiMessages();
+    } else if (tab === 'users') {
+        document.getElementById('chat-thread')?.classList.add('hidden');
+        document.getElementById('chat-list')?.classList.remove('hidden');
         loadChatUsers();
     } else {
+        document.getElementById('chat-thread')?.classList.add('hidden');
+        document.getElementById('chat-list')?.classList.remove('hidden');
         loadChatConversations();
     }
 }
@@ -302,6 +330,11 @@ async function openChatConversation(conversationId) {
 }
 
 function closeChatThread() {
+    if (chatState.activeTab === 'ai') {
+        switchChatTab('conversations');
+        return;
+    }
+
     chatState.activeConversationId = null;
     clearInterval(chatState.messageTimer);
     document.getElementById('chat-thread')?.classList.add('hidden');
@@ -368,11 +401,31 @@ function renderChatMessages(scrollToBottom = true) {
     }
 }
 
+function renderAiMessages(scrollToBottom = true) {
+    const messagesBox = document.getElementById('chat-messages');
+    if (!messagesBox) return;
+
+    if (!chatState.aiMessages.length) {
+        messagesBox.innerHTML = `
+            <div class="chat-empty chat-empty-thread">
+                <span class="material-icons-outlined">smart_toy</span>
+                <p>Hoi Gemini ve hoc tap, lich hoc hoac cach su dung he thong</p>
+            </div>
+        `;
+        return;
+    }
+
+    chatState.messages = chatState.aiMessages;
+    renderChatMessages(scrollToBottom);
+}
+
 async function sendChatMessage(event) {
     event.preventDefault();
     const input = document.getElementById('chat-message-input');
     const content = input?.value.trim();
-    if (!content || !chatState.activeConversationId) return false;
+    if (!content) return false;
+    if (chatState.activeTab === 'ai') return sendAiChatMessage(input, content);
+    if (!chatState.activeConversationId) return false;
 
     input.disabled = true;
     try {
@@ -385,6 +438,41 @@ async function sendChatMessage(event) {
         input.disabled = false;
         input.focus();
     }
+    return false;
+}
+
+async function sendAiChatMessage(input, content) {
+    const history = chatState.aiMessages.slice(-10);
+    const userMessage = {
+        content,
+        is_mine: true,
+        created_at: new Date().toISOString(),
+    };
+    const pendingMessage = {
+        content: 'Dang tra loi...',
+        is_mine: false,
+        created_at: new Date().toISOString(),
+    };
+
+    chatState.aiMessages.push(userMessage, pendingMessage);
+    input.value = '';
+    input.disabled = true;
+    renderAiMessages();
+
+    try {
+        const data = await API.post(CONFIG.ENDPOINTS.CHAT_AI, { message: content, history });
+        pendingMessage.content = data.reply || 'Xin loi, toi chua co cau tra loi.';
+        pendingMessage.created_at = new Date().toISOString();
+        renderAiMessages();
+    } catch (error) {
+        chatState.aiMessages = chatState.aiMessages.filter(message => message !== pendingMessage);
+        renderAiMessages(false);
+        showToast(chatErrorMessage(error, 'Khong the hoi Gemini'), 'error');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+
     return false;
 }
 
@@ -407,6 +495,10 @@ function chatDisplayName(user) {
 }
 
 function renderChatAvatar(user) {
+    if (user?.is_ai) {
+        return `<span class="chat-avatar chat-avatar-ai"><span class="material-icons-outlined">smart_toy</span></span>`;
+    }
+
     const label = chatDisplayName(user).charAt(0).toUpperCase();
     if (user?.avatar_url) {
         return `<span class="chat-avatar"><img src="${escapeChatAttr(user.avatar_url)}" alt=""></span>`;

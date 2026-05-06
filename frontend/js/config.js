@@ -43,6 +43,7 @@ const CONFIG = {
         CHAT_USERS: '/chat/users/',
         CHAT_CONVERSATIONS: '/chat/conversations/',
         CHAT_UNREAD_COUNT: '/chat/unread-count/',
+        CHAT_AI: '/chat/ai/',
     },
 
     // Role labels
