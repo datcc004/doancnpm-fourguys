@@ -38,6 +38,11 @@ const CONFIG = {
 
         // Materials
         MATERIALS: '/courses/materials/',
+
+        // Chat
+        CHAT_USERS: '/chat/users/',
+        CHAT_CONVERSATIONS: '/chat/conversations/',
+        CHAT_UNREAD_COUNT: '/chat/unread-count/',
     },
 
     // Role labels

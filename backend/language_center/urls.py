@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/courses/', include('apps.courses.urls')),
     path('api/payments/', include('apps.payments.urls')),
     path('api/attendance/', include('apps.attendance.urls')),
+    path('api/chat/', include('apps.chat.urls')),
 ]
 
 # Serve media files trong development
