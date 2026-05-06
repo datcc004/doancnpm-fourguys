@@ -269,6 +269,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     student_name = serializers.SerializerMethodField()
+    student_code = serializers.CharField(source='student.student_code', read_only=True)
     classroom_name = serializers.CharField(source='classroom.name', read_only=True, allow_null=True)
     classroom_code = serializers.CharField(source='classroom.code', read_only=True, allow_null=True)
     course_name = serializers.SerializerMethodField()
@@ -277,7 +278,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Enrollment
-        fields = ['id', 'student', 'student_name', 'course', 'course_name', 'classroom', 'classroom_name', 'classroom_code',
+        fields = ['id', 'student', 'student_name', 'student_code', 'course', 'course_name', 'classroom', 'classroom_name', 'classroom_code',
                   'enrollment_date', 'status',
                   'deposit_amount', 'payment_status', 'payment_status_display',
                   'approval_status', 'approval_status_display',

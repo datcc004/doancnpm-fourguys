@@ -157,6 +157,10 @@ async function renderGradesManagement(content) {
                 </select>
             </div>
             <div class="toolbar-right" id="grades-actions" style="display:none">
+                <button class="btn btn-secondary" onclick="downloadClassResultsExcel()">
+                    <span class="material-icons-outlined">download</span>
+                    <span>Xuất Excel</span>
+                </button>
                 <button class="btn btn-primary" onclick="openAddTestScoreModal()">
                     <span class="material-icons-outlined">add</span>
                     <span>Thêm bài Test</span>
@@ -174,6 +178,50 @@ async function renderGradesManagement(content) {
             </div>
         </div>
     </div>`;
+}
+
+async function downloadClassResultsExcel() {
+    const classSelect = document.getElementById('grade-class-select');
+    const classId = classSelect?.value;
+    if (!classId) {
+        showToast('Vui lòng chọn lớp trước', 'warning');
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('token');
+        const url = `${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.TEST_SCORES}export_class_results_excel/?classroom_id=${encodeURIComponent(classId)}`;
+        const response = await fetch(url, {
+            headers: {
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+            },
+        });
+
+        if (!response.ok) {
+            let message = 'Lỗi khi xuất Excel';
+            try {
+                const data = await response.json();
+                message = data.error || data.detail || data.classroom_id || message;
+            } catch (e) {}
+            throw new Error(Array.isArray(message) ? message.join(', ') : message);
+        }
+
+        const selectedText = classSelect.options[classSelect.selectedIndex]?.text || 'bang-diem';
+        const classCode = selectedText.split(' - ')[0] || 'lop';
+        const safeCode = String(classCode).replace(/[^\w-]+/g, '_');
+        const blob = await response.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `bang-diem-ket-qua-${safeCode}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(downloadUrl);
+        showToast('Đã tải file Excel bảng điểm', 'success');
+    } catch (error) {
+        showToast(error.message || 'Lỗi khi xuất Excel', 'error');
+    }
 }
 
 async function loadClassScoreSummary() {
