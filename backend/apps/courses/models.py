@@ -241,23 +241,46 @@ class CourseMaterial(models.Model):
 
     class Meta:
         db_table = 'course_materials'
-        verbose_name = 'Bài viết'
-        verbose_name_plural = 'Bài viết'
+        verbose_name = 'Tài liệu bài giảng'
+        verbose_name_plural = 'Tài liệu bài giảng'
         ordering = ['-created_at']
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            base = slugify(self.title)[:220] or 'blog-post'
-            slug = base
-            suffix = 1
-            while BlogPost.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f'{base}-{suffix}'
-                suffix += 1
-            self.slug = slug
+        """Tự động nhận diện loại file và kích thước."""
+        if self.file:
+            import os
+            ext = os.path.splitext(self.file.name)[1].lower()
+            ext_map = {
+                '.pdf': 'pdf',
+                '.doc': 'doc', '.docx': 'doc',
+                '.xls': 'xls', '.xlsx': 'xls',
+                '.ppt': 'ppt', '.pptx': 'ppt',
+                '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image', '.bmp': 'image', '.webp': 'image',
+                '.mp4': 'video', '.avi': 'video', '.mov': 'video', '.mkv': 'video',
+                '.mp3': 'audio', '.wav': 'audio', '.ogg': 'audio',
+                '.zip': 'archive', '.rar': 'archive', '.7z': 'archive', '.tar': 'archive', '.gz': 'archive',
+            }
+            self.file_type = ext_map.get(ext, 'other')
+            if not self.original_filename:
+                self.original_filename = os.path.basename(self.file.name)
+            try:
+                self.file_size = self.file.size
+            except Exception:
+                pass
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.title
+        return f"{self.title} - {self.classroom.code}"
+
+    @property
+    def file_size_display(self):
+        if self.file_size < 1024:
+            return f"{self.file_size} B"
+        if self.file_size < 1024 * 1024:
+            return f"{self.file_size / 1024:.1f} KB"
+        if self.file_size < 1024 * 1024 * 1024:
+            return f"{self.file_size / (1024 * 1024):.1f} MB"
+        return f"{self.file_size / (1024 * 1024 * 1024):.1f} GB"
 
 
 class Scholarship(models.Model):
@@ -296,52 +319,3 @@ class Scholarship(models.Model):
 
     def __str__(self):
         return self.title
-
-        db_table = 'course_materials'
-        verbose_name = 'Tài liệu bài giảng'
-        verbose_name_plural = 'Tài liệu bài giảng'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.title} - {self.classroom.code}"
-
-    def save(self, *args, **kwargs):
-        """Tự động detect loại file và kích thước"""
-        if self.file:
-            # Detect file type from extension
-            import os
-            ext = os.path.splitext(self.file.name)[1].lower()
-            ext_map = {
-                '.pdf': 'pdf',
-                '.doc': 'doc', '.docx': 'doc',
-                '.xls': 'xls', '.xlsx': 'xls',
-                '.ppt': 'ppt', '.pptx': 'ppt',
-                '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image', '.bmp': 'image', '.webp': 'image',
-                '.mp4': 'video', '.avi': 'video', '.mov': 'video', '.mkv': 'video',
-                '.mp3': 'audio', '.wav': 'audio', '.ogg': 'audio',
-                '.zip': 'archive', '.rar': 'archive', '.7z': 'archive', '.tar': 'archive', '.gz': 'archive',
-            }
-            self.file_type = ext_map.get(ext, 'other')
-
-            # Save original filename
-            if not self.original_filename:
-                self.original_filename = os.path.basename(self.file.name)
-
-            # File size
-            try:
-                self.file_size = self.file.size
-            except Exception:
-                pass
-
-        super().save(*args, **kwargs)
-
-    @property
-    def file_size_display(self):
-        """Hiển thị kích thước file dạng đọc được"""
-        if self.file_size < 1024:
-            return f"{self.file_size} B"
-        elif self.file_size < 1024 * 1024:
-            return f"{self.file_size / 1024:.1f} KB"
-        elif self.file_size < 1024 * 1024 * 1024:
-            return f"{self.file_size / (1024 * 1024):.1f} MB"
-        return f"{self.file_size / (1024 * 1024 * 1024):.1f} GB"
