@@ -39,7 +39,7 @@ async function renderClasses() {
                             <th>Lịch học</th>
                             <th>Sĩ số</th>
                             <th>Trạng thái</th>
-                            ${hasRole('admin', 'staff') ? '<th style="text-align:right">Thao tác</th>' : ''}
+                            ${hasRole('admin', 'staff', 'teacher') ? '<th style="text-align:right">Thao tác</th>' : ''}
                         </tr>
                     </thead>
                     <tbody id="classes-table-body">
@@ -99,13 +99,17 @@ async function loadClasses(page = 1) {
                     </div>
                 </td>
                 <td><span class="badge ${getStatusBadge(c.status)}">${getStatusLabel(c.status)}</span></td>
-                ${hasRole('admin', 'staff') ? `
+                ${hasRole('admin', 'staff', 'teacher') ? `
                 <td style="text-align:right">
                     <div class="action-btn-group">
+                        ${hasRole('admin', 'staff') ? `
                         <button class="btn-action edit" onclick="editClass(${c.id})" title="Sửa thông tin"><span class="material-icons-outlined">edit</span></button>
+                        ` : ''}
                         <button class="btn-action info" onclick="manageClassStudents(${c.id}, '${c.code}')" title="Học viên"><span class="material-icons-outlined">group</span></button>
+                        ${hasRole('admin', 'staff') ? `
                         ${c.status === 'active' ? `<button class="btn-action success" onclick="completeClass(${c.id})" title="Kết thúc"><span class="material-icons-outlined">check_circle</span></button>` : ''}
                         <button class="btn-action danger" onclick="deleteClass(${c.id})" title="Xóa"><span class="material-icons-outlined">delete</span></button>
+                        ` : ''}
                     </div>
                 </td>` : hasRole('student') ? `
                 <td>
@@ -514,9 +518,15 @@ async function manageClassStudents(classId, classCode) {
         let html = `
             <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
                 <p>Danh sách học viên lớp <strong>${classCode}</strong> (${students.length} học viên)</p>
-                <button class="btn btn-primary btn-sm" onclick="openAddStudentModal(${classId}, '${classCode}')">
-                    <span class="material-icons-outlined">person_add</span> Thêm học viên
-                </button>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadClassStudentsExcel(${classId}, '${classCode}')">
+                        <span class="material-icons-outlined">download</span> Xuất Excel
+                    </button>
+                    ${hasRole('admin', 'staff') ? `
+                    <button class="btn btn-primary btn-sm" onclick="openAddStudentModal(${classId}, '${classCode}')">
+                        <span class="material-icons-outlined">person_add</span> Thêm học viên
+                    </button>` : ''}
+                </div>
             </div>
             <div class="table-wrapper">
                 <table>
@@ -545,6 +555,41 @@ async function manageClassStudents(classId, classCode) {
         openModal(`Quản lý học viên - ${classCode}`, html);
     } catch (error) {
         showToast('Lỗi tải danh sách học viên', 'error');
+    }
+}
+
+async function downloadClassStudentsExcel(classId, classCode) {
+    try {
+        const token = localStorage.getItem('token');
+        const url = `${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.CLASSES}${classId}/export_students_excel/`;
+        const response = await fetch(url, {
+            headers: {
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+            },
+        });
+
+        if (!response.ok) {
+            let message = 'Lỗi khi xuất Excel';
+            try {
+                const data = await response.json();
+                message = data.error || data.detail || message;
+            } catch (e) {}
+            throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeCode = String(classCode || 'lop').replace(/[^\w-]+/g, '_');
+        link.href = downloadUrl;
+        link.download = `danh-sach-hoc-vien-${safeCode}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(downloadUrl);
+        showToast('Đã tải file Excel danh sách học viên', 'success');
+    } catch (error) {
+        showToast(error.message || 'Lỗi khi xuất Excel', 'error');
     }
 }
 

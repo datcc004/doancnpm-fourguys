@@ -12,7 +12,9 @@ router.register(r'enrollments', views.EnrollmentViewSet, basename='enrollment')
 router.register(r'scores', views.TestScoreViewSet, basename='testscore')
 router.register(r'blog-posts', views.BlogPostViewSet, basename='blogpost')
 router.register(r'scholarships', views.ScholarshipViewSet, basename='scholarship')
+router.register(r'materials', views.CourseMaterialViewSet, basename='coursematerial')
 
 urlpatterns = [
     path('', include(router.urls)),
 ]
+

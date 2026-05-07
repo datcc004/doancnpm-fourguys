@@ -1,6 +1,12 @@
 """
 Views - API endpoints cho courses
 """
+from io import BytesIO
+from datetime import datetime
+from zipfile import ZIP_DEFLATED, ZipFile
+from xml.sax.saxutils import escape
+
+from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,13 +14,84 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Count, Q, Avg
 from django.db import transaction
 
+
 from .models import Course, ClassRoom, Enrollment, TestScore, BlogPost, Scholarship
 from .serializers import (
     CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
     EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer,
     BlogPostSerializer, ScholarshipSerializer,
+from .models import Course, ClassRoom, Enrollment, TestScore, CourseMaterial
+from .serializers import (
+    CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
+    EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer,
+    CourseMaterialSerializer,
 )
 from apps.accounts.permissions import IsStaffOrAdmin
+
+
+def _xlsx_cell_ref(row, col):
+    letters = ''
+    while col:
+        col, rem = divmod(col - 1, 26)
+        letters = chr(65 + rem) + letters
+    return f'{letters}{row}'
+
+
+def _xlsx_cell(value, row, col):
+    ref = _xlsx_cell_ref(row, col)
+    if value is None:
+        value = ''
+    if hasattr(value, 'strftime'):
+        value = value.strftime('%d/%m/%Y')
+    text = escape(str(value))
+    return f'<c r="{ref}" t="inlineStr"><is><t>{text}</t></is></c>'
+
+
+def _build_xlsx(filename, headers, rows):
+    sheet_rows = []
+    all_rows = [headers] + rows
+    for row_idx, row_values in enumerate(all_rows, start=1):
+        cells = ''.join(_xlsx_cell(value, row_idx, col_idx) for col_idx, value in enumerate(row_values, start=1))
+        sheet_rows.append(f'<row r="{row_idx}">{cells}</row>')
+
+    worksheet = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>{''.join(sheet_rows)}</sheetData>
+</worksheet>'''
+    workbook = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Danh sach hoc vien" sheetId="1" r:id="rId1"/></sheets>
+</workbook>'''
+    workbook_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>'''
+    root_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>'''
+    content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>'''
+
+    output = BytesIO()
+    with ZipFile(output, 'w', ZIP_DEFLATED) as xlsx:
+        xlsx.writestr('[Content_Types].xml', content_types)
+        xlsx.writestr('_rels/.rels', root_rels)
+        xlsx.writestr('xl/workbook.xml', workbook)
+        xlsx.writestr('xl/_rels/workbook.xml.rels', workbook_rels)
+        xlsx.writestr('xl/worksheets/sheet1.xml', worksheet)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 class CourseViewSet(viewsets.ModelViewSet):
@@ -86,7 +163,7 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
         return queryset.all()
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'enroll', 'my_classes', 'students']:
+        if self.action in ['list', 'retrieve', 'enroll', 'my_classes', 'students', 'export_students_excel']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStaffOrAdmin()]
 
@@ -178,6 +255,57 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
         classroom = self.get_object()
         enrollments = classroom.enrollments.select_related('student__user').all()
         return Response(EnrollmentSerializer(enrollments, many=True).data)
+
+    @action(detail=True, methods=['get'])
+    def export_students_excel(self, request, pk=None):
+        """Xuat Excel danh sach hoc vien trong lop cho admin/staff va giao vien cua lop."""
+        classroom = self.get_object()
+        user = request.user
+        is_staff_user = user.role in ['admin', 'staff']
+        is_class_teacher = (
+            user.role == 'teacher'
+            and hasattr(user, 'teacher_profile')
+            and classroom.teacher_id == user.teacher_profile.id
+        )
+        if not (is_staff_user or is_class_teacher):
+            return Response({'error': 'Ban khong co quyen xuat danh sach hoc vien lop nay'}, status=status.HTTP_403_FORBIDDEN)
+
+        enrollments = classroom.enrollments.select_related(
+            'student__user',
+        ).order_by('student__student_code', 'student__user__last_name', 'student__user__first_name')
+
+        headers = [
+            'STT',
+            'Ma hoc vien',
+            'Ho ten',
+            'Email',
+            'So dien thoai',
+            'Ngay dang ky',
+            'Trang thai hoc',
+            'Trang thai thanh toan',
+            'Trang thai duyet',
+        ]
+        rows = []
+        for index, enrollment in enumerate(enrollments, start=1):
+            student = enrollment.student
+            user_obj = student.user
+            rows.append([
+                index,
+                student.student_code,
+                user_obj.get_full_name() or user_obj.username,
+                user_obj.email,
+                user_obj.phone,
+                enrollment.enrollment_date,
+                enrollment.get_status_display(),
+                enrollment.get_payment_status_display(),
+                enrollment.get_approval_status_display(),
+            ])
+
+        safe_code = ''.join(ch if ch.isalnum() or ch in ['-', '_'] else '_' for ch in classroom.code)
+        today = datetime.now().strftime('%Y%m%d')
+        filename = f'danh-sach-hoc-vien-{safe_code}-{today}.xlsx'
+        return _build_xlsx(filename, headers, rows)
+
     @action(detail=True, methods=['get'])
     def scheduled_dates(self, request, pk=None):
         """Tính toán danh sách các ngày học thực tế dựa trên lịch biểu (T2-T4-T6, v.v.)"""
@@ -335,12 +463,29 @@ class TestScoreViewSet(viewsets.ModelViewSet):
         return queryset
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'student_report', 'class_summary']:
+        if self.action in ['list', 'retrieve', 'student_report', 'class_summary', 'export_class_results_excel']:
             return [IsAuthenticated()]
         if self.action in ['create', 'update', 'partial_update', 'destroy', 'bulk_create']:
             from apps.accounts.permissions import IsStaffOrAdmin, IsTeacher
             return [IsAuthenticated(), (IsStaffOrAdmin | IsTeacher)()]
         return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def _get_manageable_classroom(self, classroom_id, request):
+        try:
+            classroom = ClassRoom.objects.select_related('teacher__user').get(id=classroom_id)
+        except ClassRoom.DoesNotExist:
+            raise ValidationError({'classroom_id': 'Lop hoc khong ton tai'})
+
+        user = request.user
+        is_staff_user = user.role in ['admin', 'staff']
+        is_class_teacher = (
+            user.role == 'teacher'
+            and hasattr(user, 'teacher_profile')
+            and classroom.teacher_id == user.teacher_profile.id
+        )
+        if not (is_staff_user or is_class_teacher):
+            raise ValidationError({'classroom_id': 'Ban khong co quyen xuat bang diem lop nay'})
+        return classroom
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -537,6 +682,7 @@ class TestScoreViewSet(viewsets.ModelViewSet):
         })
 
 
+
 class BlogPostViewSet(viewsets.ModelViewSet):
     """API blog/tin tức cho landing page."""
     serializer_class = BlogPostSerializer
@@ -582,3 +728,181 @@ class ScholarshipViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+    @action(detail=False, methods=['get'])
+    def export_class_results_excel(self, request):
+        """Xuat Excel bang diem ket qua hoc tap theo lop."""
+        classroom_id = request.query_params.get('classroom_id')
+        if not classroom_id:
+            return Response({'error': 'Thieu classroom_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            classroom = self._get_manageable_classroom(classroom_id, request)
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_403_FORBIDDEN)
+
+        test_names = list(TestScore.objects.filter(
+            classroom=classroom
+        ).values_list('test_name', flat=True).distinct().order_by('test_name'))
+
+        enrollments = Enrollment.objects.filter(
+            classroom=classroom,
+            status='active',
+        ).select_related('student__user').order_by(
+            'student__student_code',
+            'student__user__last_name',
+            'student__user__first_name',
+        )
+
+        headers = [
+            'STT',
+            'Ma hoc vien',
+            'Ho ten',
+            *test_names,
+            'TB giua ky',
+            'TB cuoi ky',
+            'Tong ket',
+            'Xep loai',
+            'Ket qua',
+        ]
+        rows = []
+
+        for index, enrollment in enumerate(enrollments, start=1):
+            student = enrollment.student
+            user_obj = student.user
+            scores = TestScore.objects.filter(student=student, classroom=classroom)
+            score_map = {score.test_name: score.score_10 for score in scores}
+
+            midterms = scores.filter(test_type='midterm')
+            finals = scores.filter(test_type='final')
+            avg_mid = round(float(midterms.aggregate(avg=Avg('score'))['avg'] or 0), 2) if midterms.exists() else None
+            avg_fin = round(float(finals.aggregate(avg=Avg('score'))['avg'] or 0), 2) if finals.exists() else None
+
+            final_grade = None
+            if avg_mid is not None and avg_fin is not None:
+                final_grade = round(avg_mid * 0.3 + avg_fin * 0.7, 2)
+            elif scores.exists():
+                total = sum(score.score_10 for score in scores)
+                final_grade = round(total / scores.count(), 2)
+
+            letter = '-'
+            if final_grade is not None:
+                if final_grade >= 8.5: letter = 'A'
+                elif final_grade >= 7.8: letter = 'B+'
+                elif final_grade >= 7.0: letter = 'B'
+                elif final_grade >= 6.3: letter = 'C+'
+                elif final_grade >= 5.5: letter = 'C'
+                elif final_grade >= 4.8: letter = 'D+'
+                elif final_grade >= 4.0: letter = 'D'
+                else: letter = 'F'
+
+            rows.append([
+                index,
+                student.student_code,
+                user_obj.get_full_name() or user_obj.username,
+                *[score_map.get(test_name, '') for test_name in test_names],
+                avg_mid if avg_mid is not None else '',
+                avg_fin if avg_fin is not None else '',
+                final_grade if final_grade is not None else '',
+                letter,
+                'Rot' if letter == 'F' else ('Dat' if letter != '-' else ''),
+            ])
+
+        safe_code = ''.join(ch if ch.isalnum() or ch in ['-', '_'] else '_' for ch in classroom.code)
+        today = datetime.now().strftime('%Y%m%d')
+        filename = f'bang-diem-ket-qua-{safe_code}-{today}.xlsx'
+        return _build_xlsx(filename, headers, rows)
+
+
+class CourseMaterialViewSet(viewsets.ModelViewSet):
+    """CRUD cho CourseMaterial - Tài liệu bài giảng
+    
+    - Giảng viên: upload/sửa/xóa tài liệu cho lớp mình dạy
+    - Học viên: xem/tải tài liệu của lớp mình đang học
+    - Admin/Staff: toàn quyền
+    """
+    serializer_class = CourseMaterialSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['classroom', 'file_type']
+    search_fields = ['title', 'description', 'original_filename']
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = CourseMaterial.objects.select_related(
+            'classroom__course', 'classroom__teacher__user', 'uploaded_by'
+        ).all()
+
+        # Admin/Staff: xem tất cả
+        if user.role in ['admin', 'staff']:
+            return queryset
+
+        # Giảng viên: chỉ xem tài liệu của lớp mình dạy
+        if user.role == 'teacher' and hasattr(user, 'teacher_profile'):
+            return queryset.filter(classroom__teacher=user.teacher_profile)
+
+        # Học viên: chỉ xem tài liệu của lớp mình đang học
+        if user.role == 'student' and hasattr(user, 'student_profile'):
+            enrolled_classes = Enrollment.objects.filter(
+                student=user.student_profile,
+                status__in=['active', 'completed']
+            ).values_list('classroom_id', flat=True)
+            return queryset.filter(classroom_id__in=enrolled_classes)
+
+        return queryset.none()
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'download']:
+            return [IsAuthenticated()]
+        # Upload/sửa/xóa: chỉ GV hoặc Admin/Staff
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            from apps.accounts.permissions import IsStaffOrAdmin, IsTeacher
+            return [IsAuthenticated(), (IsStaffOrAdmin | IsTeacher)()]
+        return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def perform_create(self, serializer):
+        """Gán người upload và kiểm tra quyền trên lớp"""
+        classroom = serializer.validated_data.get('classroom')
+        user = self.request.user
+
+        # Nếu là giảng viên, kiểm tra có đang dạy lớp này không
+        if user.role == 'teacher' and hasattr(user, 'teacher_profile'):
+            if classroom.teacher != user.teacher_profile:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied('Bạn không phải giảng viên phụ trách lớp này.')
+
+        serializer.save(uploaded_by=user)
+
+    def perform_update(self, serializer):
+        """Kiểm tra quyền sửa: chỉ người upload hoặc admin"""
+        user = self.request.user
+        obj = self.get_object()
+
+        if user.role == 'teacher' and obj.uploaded_by != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Bạn chỉ có thể sửa tài liệu do chính mình tải lên.')
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Kiểm tra quyền xóa: chỉ người upload hoặc admin"""
+        user = self.request.user
+
+        if user.role == 'teacher' and instance.uploaded_by != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Bạn chỉ có thể xóa tài liệu do chính mình tải lên.')
+
+        # Xóa file vật lý
+        if instance.file:
+            instance.file.delete(save=False)
+        instance.delete()
+
+    @action(detail=True, methods=['post'])
+    def download(self, request, pk=None):
+        """Tăng lượt tải khi học viên tải file"""
+        material = self.get_object()
+        material.download_count += 1
+        material.save(update_fields=['download_count'])
+        return Response({
+            'file_url': request.build_absolute_uri(material.file.url),
+            'download_count': material.download_count
+        })
+

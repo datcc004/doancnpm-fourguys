@@ -2,8 +2,10 @@
 Views - API endpoints cho attendance
 Nghiệp vụ: Chọn lớp → Chọn buổi học → Điểm danh học viên
 """
-from datetime import date
+from datetime import date, timedelta
+import re
 
+from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -11,7 +13,7 @@ from django.utils.dateparse import parse_date
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
@@ -27,14 +29,119 @@ from .serializers import (
 from apps.courses.models import ClassRoom
 
 
+def _is_staff_user(user):
+    return getattr(user, 'role', None) in ['admin', 'staff']
+
+
+def _is_class_teacher(user, classroom):
+    teacher = getattr(user, 'teacher_profile', None)
+    return bool(teacher and classroom.teacher_id == teacher.id)
+
+
+def _is_class_student(user, classroom):
+    student = getattr(user, 'student_profile', None)
+    if not student:
+        return False
+    return classroom.enrollments.filter(student=student, status__in=['active', 'completed']).exists()
+
+
+def _can_view_class(user, classroom):
+    return _is_staff_user(user) or _is_class_teacher(user, classroom) or _is_class_student(user, classroom)
+
+
+def _can_manage_class_attendance(user, classroom):
+    return _is_staff_user(user) or _is_class_teacher(user, classroom)
+
+
+def _ensure_can_view_class(user, classroom):
+    if not _can_view_class(user, classroom):
+        raise PermissionDenied('Ban khong co quyen xem du lieu diem danh cua lop nay')
+
+
+def _ensure_can_manage_class_attendance(user, classroom):
+    if not _can_manage_class_attendance(user, classroom):
+        raise PermissionDenied('Ban khong co quyen cap nhat diem danh cua lop nay')
+
+
+def _scheduled_dates_for_classroom(classroom):
+    if not classroom.start_date or not classroom.end_date or not classroom.schedule:
+        return set()
+
+    schedule_str = classroom.schedule.upper()
+    mapping = {
+        'T2': 0, 'THU 2': 0, 'THU HAI': 0,
+        'T3': 1, 'THU 3': 1, 'THU BA': 1,
+        'T4': 2, 'THU 4': 2, 'THU TU': 2,
+        'T5': 3, 'THU 5': 3, 'THU NAM': 3,
+        'T6': 4, 'THU 6': 4, 'THU SAU': 4,
+        'T7': 5, 'THU 7': 5, 'THU BAY': 5,
+        'CN': 6, 'CHU NHAT': 6,
+    }
+    active_days = set()
+    for key, day_idx in mapping.items():
+        if re.search(rf'\b{re.escape(key)}\b', schedule_str):
+            active_days.add(day_idx)
+        elif key in schedule_str and (key.startswith('THU') or key == 'CHU NHAT'):
+            active_days.add(day_idx)
+
+    if not active_days:
+        for i in range(2, 8):
+            if f'T{i}' in schedule_str or f'{i}' in schedule_str:
+                active_days.add(i - 2)
+        if 'CN' in schedule_str or '8' in schedule_str:
+            active_days.add(6)
+
+    dates = set()
+    current = classroom.start_date
+    while current <= classroom.end_date:
+        if current.weekday() in active_days:
+            dates.add(current)
+        current += timedelta(days=1)
+    return dates
+
+
+def _validate_attendance_session_input(classroom, session_date):
+    if classroom.status != 'active':
+        raise ValidationError({'classroom_id': 'Chi duoc diem danh lop dang hoc'})
+
+    scheduled_dates = _scheduled_dates_for_classroom(classroom)
+    if scheduled_dates and session_date not in scheduled_dates:
+        raise ValidationError({'session_date': 'Ngay nay khong nam trong lich hoc cua lop'})
+
+
+def _validate_students_in_class(classroom, records):
+    student_ids = {record.get('student_id') for record in records if record.get('student_id')}
+    if len(student_ids) != len(records):
+        raise ValidationError({'records': 'Moi ban ghi phai co student_id hop le'})
+
+    enrolled_ids = set(classroom.enrollments.filter(
+        student_id__in=student_ids,
+        status='active',
+    ).values_list('student_id', flat=True))
+    invalid_ids = sorted(student_ids - enrolled_ids)
+    if invalid_ids:
+        raise ValidationError({
+            'records': f'Co hoc vien khong thuoc lop hoac khong dang hoc: {invalid_ids}'
+        })
+
+
 class AttendanceSessionViewSet(viewsets.ModelViewSet):
     """CRUD cho AttendanceSession"""
+    permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
         user = self.request.user
         if user.role in ['admin', 'staff']:
             return AttendanceSession.objects.select_related('classroom').prefetch_related('records__student__user').all()
         # Đối với giáo viên, chỉ xem được buổi điểm danh của lớp mình dạy
-        return AttendanceSession.objects.filter(classroom__teacher__user=user).select_related('classroom').prefetch_related('records__student__user').all()
+        if user.role == 'teacher':
+            return AttendanceSession.objects.filter(classroom__teacher__user=user).select_related('classroom').prefetch_related('records__student__user').all()
+        if user.role == 'student' and hasattr(user, 'student_profile'):
+            return AttendanceSession.objects.filter(
+                classroom__enrollments__student=user.student_profile,
+                classroom__enrollments__status__in=['active', 'completed'],
+            ).select_related('classroom').prefetch_related('records__student__user').distinct()
+        return AttendanceSession.objects.none()
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -42,7 +149,22 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         return AttendanceSessionSerializer
 
     def perform_create(self, serializer):
+        classroom = serializer.validated_data['classroom']
+        session_date = serializer.validated_data['session_date']
+        _ensure_can_manage_class_attendance(self.request.user, classroom)
+        _validate_attendance_session_input(classroom, session_date)
         serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        classroom = serializer.validated_data.get('classroom', serializer.instance.classroom)
+        session_date = serializer.validated_data.get('session_date', serializer.instance.session_date)
+        _ensure_can_manage_class_attendance(self.request.user, classroom)
+        _validate_attendance_session_input(classroom, session_date)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        _ensure_can_manage_class_attendance(self.request.user, instance.classroom)
+        instance.delete()
 
     @action(detail=False, methods=['post'])
     @transaction.atomic
@@ -57,9 +179,10 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         data = serializer.validated_data
         
         # Kiểm tra quyền: Chỉ giáo viên dạy lớp này mới được điểm danh (hoặc admin/staff)
-        classroom = ClassRoom.objects.get(id=data['classroom_id'])
-        if request.user.role == 'teacher' and classroom.teacher.user != request.user:
-            return Response({'error': 'Bạn không được phân công dạy lớp này'}, status=status.HTTP_403_FORBIDDEN)
+        classroom = get_object_or_404(ClassRoom, id=data['classroom_id'])
+        _ensure_can_manage_class_attendance(request.user, classroom)
+        _validate_attendance_session_input(classroom, data['session_date'])
+        _validate_students_in_class(classroom, data['records'])
 
         # Tạo session (hoặc lấy lại nếu đã tồn tại)
         session, created = AttendanceSession.objects.get_or_create(
@@ -134,13 +257,8 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Thiếu classroom_id'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Kiểm tra quyền: Nếu là giáo viên, chỉ xem được lớp mình dạy
-        if request.user.role == 'teacher':
-            try:
-                classroom = ClassRoom.objects.get(id=classroom_id)
-                if classroom.teacher.user != request.user:
-                    return Response({'error': 'Bạn không có quyền xem lớp này'}, status=status.HTTP_403_FORBIDDEN)
-            except ClassRoom.DoesNotExist:
-                return Response({'error': 'Lớp học không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        classroom = get_object_or_404(ClassRoom, id=classroom_id)
+        _ensure_can_view_class(request.user, classroom)
 
         session_date = request.query_params.get('session_date')
         sessions = self.get_queryset().filter(classroom_id=classroom_id)
@@ -166,6 +284,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         except AttendanceSession.DoesNotExist:
             return Response({'error': 'Buổi học không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
 
+        _ensure_can_view_class(request.user, session.classroom)
         return Response(AttendanceSessionSerializer(session).data)
 
     @action(detail=False, methods=['get'])
@@ -177,9 +296,22 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         if not student_id:
             return Response({'error': 'Thiếu student_id'}, status=status.HTTP_400_BAD_REQUEST)
 
+        if request.user.role == 'student':
+            own_student = getattr(request.user, 'student_profile', None)
+            if not own_student or str(own_student.id) != str(student_id):
+                raise PermissionDenied('Ban chi duoc xem bao cao diem danh cua chinh minh')
+
+        if classroom_id:
+            classroom = get_object_or_404(ClassRoom, id=classroom_id)
+            _ensure_can_view_class(request.user, classroom)
+        elif request.user.role == 'teacher':
+            raise ValidationError({'classroom_id': 'Giao vien can chon lop hoc'})
+
         records = AttendanceRecord.objects.filter(student_id=student_id)
         if classroom_id:
             records = records.filter(session__classroom_id=classroom_id)
+        if request.user.role == 'teacher':
+            records = records.filter(session__classroom__teacher__user=request.user)
 
         total = records.count()
         present = records.filter(status='present').count()
@@ -206,6 +338,9 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         if not classroom_id:
             return Response({'error': 'Thiếu classroom_id'}, status=status.HTTP_400_BAD_REQUEST)
 
+        classroom = get_object_or_404(ClassRoom, id=classroom_id)
+        _ensure_can_view_class(request.user, classroom)
+
         sessions = AttendanceSession.objects.filter(
             classroom_id=classroom_id
         ).select_related('classroom').prefetch_related(
@@ -224,10 +359,43 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
 
 class AttendanceRecordViewSet(viewsets.ModelViewSet):
     """CRUD cho AttendanceRecord"""
-    queryset = AttendanceRecord.objects.select_related('session', 'student__user').all()
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['session', 'student', 'status']
+
+    def get_queryset(self):
+        qs = AttendanceRecord.objects.select_related(
+            'session__classroom',
+            'student__user',
+        ).all()
+        user = self.request.user
+        if _is_staff_user(user):
+            return qs
+        if user.role == 'teacher':
+            return qs.filter(session__classroom__teacher__user=user)
+        if user.role == 'student' and hasattr(user, 'student_profile'):
+            return qs.filter(student=user.student_profile)
+        return qs.none()
+
+    def perform_create(self, serializer):
+        session = serializer.validated_data['session']
+        student = serializer.validated_data['student']
+        _ensure_can_manage_class_attendance(self.request.user, session.classroom)
+        _validate_attendance_session_input(session.classroom, session.session_date)
+        _validate_students_in_class(session.classroom, [{'student_id': student.id}])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        session = serializer.validated_data.get('session', serializer.instance.session)
+        student = serializer.validated_data.get('student', serializer.instance.student)
+        _ensure_can_manage_class_attendance(self.request.user, session.classroom)
+        _validate_attendance_session_input(session.classroom, session.session_date)
+        _validate_students_in_class(session.classroom, [{'student_id': student.id}])
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        _ensure_can_manage_class_attendance(self.request.user, instance.session.classroom)
+        instance.delete()
 
 
 def _parse_work_date(value):

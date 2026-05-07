@@ -55,6 +55,7 @@ function navigate(page, params = null) {
         attendance: 'Điểm danh',
         'teacher-attendance': 'Chấm công giảng viên',
         grades: 'Kết quả học tập',
+        materials: 'Tài liệu Bài giảng',
         schedule: 'Lịch học & Thời khóa biểu',
         profile: 'Thông tin cá nhân',
     };
@@ -81,6 +82,7 @@ function navigate(page, params = null) {
             case 'attendance': renderAttendance(window.navParams); break;
             case 'teacher-attendance': renderTeacherAttendance(window.navParams); break;
             case 'grades': renderGrades(window.navParams); break;
+            case 'materials': renderMaterials(window.navParams); break;
             case 'schedule': 
                 currentScheduleOffset = 0; // Reset về tuần hiện tại khi bấm menu
                 renderSchedule(); 

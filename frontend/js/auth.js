@@ -147,6 +147,7 @@ function checkAuth() {
 function showLoginPage() {
     document.getElementById('login-page').classList.add('active');
     document.getElementById('app-container').classList.add('hidden');
+    if (typeof destroyChatWidget === 'function') destroyChatWidget();
     // Reset form
     document.getElementById('login-form').reset();
     document.getElementById('login-error').classList.add('hidden');
@@ -174,6 +175,7 @@ function showAppPage() {
     applyRolePermissions();
     // Load dashboard
     navigate('dashboard');
+    if (typeof initChatWidget === 'function') initChatWidget();
 }
 
 /**
