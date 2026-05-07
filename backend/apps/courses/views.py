@@ -15,16 +15,11 @@ from django.db.models import Count, Q, Avg
 from django.db import transaction
 
 
-from .models import Course, ClassRoom, Enrollment, TestScore, BlogPost, Scholarship
+from .models import Course, ClassRoom, Enrollment, TestScore, BlogPost, Scholarship, CourseMaterial
 from .serializers import (
     CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
     EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer,
-    BlogPostSerializer, ScholarshipSerializer,
-from .models import Course, ClassRoom, Enrollment, TestScore, CourseMaterial
-from .serializers import (
-    CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
-    EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer,
-    CourseMaterialSerializer,
+    BlogPostSerializer, ScholarshipSerializer, CourseMaterialSerializer,
 )
 from apps.accounts.permissions import IsStaffOrAdmin
 

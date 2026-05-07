@@ -210,6 +210,9 @@ class BlogPost(models.Model):
     is_published = models.BooleanField(default=True, verbose_name='Công khai')
     published_at = models.DateTimeField(blank=True, null=True, verbose_name='Ngày xuất bản')
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Người tạo')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
 class CourseMaterial(models.Model):
     """Tài liệu bài giảng - Giảng viên upload, Học viên tải về"""
     FILE_TYPE_CHOICES = [
@@ -237,10 +240,10 @@ class CourseMaterial(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'blog_posts'
+        db_table = 'course_materials'
         verbose_name = 'Bài viết'
         verbose_name_plural = 'Bài viết'
-        ordering = ['-published_at', '-created_at']
+        ordering = ['-created_at']
 
     def save(self, *args, **kwargs):
         if not self.slug:
