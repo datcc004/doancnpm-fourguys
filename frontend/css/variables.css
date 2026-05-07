@@ -96,6 +96,17 @@
 
     /* Font */
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+    /* Landing / trang chủ (tông xanh đậm kiểu website tư vấn du học) */
+    --landing-navy: #061a33;
+    --landing-navy-2: #0a2744;
+    --landing-navy-deep: #040d1a;
+    --landing-header-h: 64px;
+    --landing-logo: 56px;
+    --landing-menu-fs: 12px;
+    --landing-menu-gap: 20px;
+    --landing-cyan: #7dd3fc;
+    --landing-cyan-bright: #a5f3fc;
 }
 
 

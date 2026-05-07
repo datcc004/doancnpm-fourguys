@@ -2,7 +2,7 @@
 Serializers - Chuyển đổi dữ liệu cho API courses
 """
 from rest_framework import serializers
-from .models import Course, ClassRoom, Enrollment, TestScore
+from .models import Course, ClassRoom, Enrollment, TestScore, BlogPost, Scholarship
 from apps.accounts.serializers import StudentSerializer, TeacherSerializer
 
 
@@ -398,3 +398,47 @@ class BulkTestScoreSerializer(serializers.Serializer):
     scores = serializers.ListField(
         child=serializers.DictField()
     )
+
+
+class BlogPostSerializer(serializers.ModelSerializer):
+    """Serializer blog cho landing page."""
+    content_preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogPost
+        fields = [
+            'id', 'title', 'slug', 'excerpt', 'content', 'content_preview',
+            'cover_image_url', 'is_published', 'published_at', 'created_at',
+        ]
+        read_only_fields = ['id', 'slug', 'created_at']
+
+    def get_content_preview(self, obj):
+        if obj.excerpt:
+            return obj.excerpt
+        text = (obj.content or '').strip()
+        if len(text) <= 180:
+            return text
+        return f'{text[:177]}...'
+
+
+class ScholarshipSerializer(serializers.ModelSerializer):
+    """Serializer học bổng cho landing page và quản trị."""
+
+    content_preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Scholarship
+        fields = [
+            'id', 'title', 'slug', 'short_description', 'content', 'content_preview',
+            'amount_text', 'eligibility', 'deadline', 'image_url',
+            'is_published', 'published_at', 'created_at',
+        ]
+        read_only_fields = ['id', 'slug', 'created_at']
+
+    def get_content_preview(self, obj):
+        if obj.short_description:
+            return obj.short_description
+        text = (obj.content or '').strip()
+        if len(text) <= 180:
+            return text
+        return f'{text[:177]}...'

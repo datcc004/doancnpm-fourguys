@@ -9,12 +9,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
-    <link rel="stylesheet" href="css/variables.css">
-    <link rel="stylesheet" href="css/base.css">
-    <link rel="stylesheet" href="css/components.css">
-    <link rel="stylesheet" href="css/layout.css">
-    <link rel="stylesheet" href="css/pages.css">
-    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/variables.css?v=5">
+    <link rel="stylesheet" href="css/base.css?v=5">
+    <link rel="stylesheet" href="css/components.css?v=5">
+    <link rel="stylesheet" href="css/layout.css?v=5">
+    <link rel="stylesheet" href="css/pages.css?v=5">
+    <link rel="stylesheet" href="css/animations.css?v=5">
     <!-- Flatpickr Datepicker -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
@@ -24,29 +24,98 @@
     <div id="login-page" class="page active">
         <div class="login-container">
             <div class="login-left">
-                <div class="login-brand">
-                    <div class="brand-icon">
-                        <img src="logo.png" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                <header class="landing-header">
+                    <div class="landing-logo">
+                        <img src="logo.png" alt="FourGuys logo">
                     </div>
-                    <h1>FourGuys</h1>
-                    <p>Hệ thống quản lý đào tạo ngoại ngữ</p>
+                    <nav class="landing-nav" id="landing-nav">
+                        <a class="is-active" href="javascript:void(0)" data-landing="home" data-hash="trang-chu">Trang chủ</a>
+                        <a href="javascript:void(0)" data-landing="about" data-hash="gioi-thieu">Giới thiệu</a>
+                        <a href="javascript:void(0)" data-landing="courses" data-hash="khoa-hoc">Khóa học</a>
+                        <a href="javascript:void(0)" data-landing="scholarships" data-hash="hoc-bong">Học bổng</a>
+                        <a href="javascript:void(0)" data-landing="events" data-hash="su-kien">Sự kiện</a>
+                        <a href="javascript:void(0)" data-landing="news" data-hash="tin-tuc">Tin tức</a>
+                        <a href="javascript:void(0)" data-landing="contact" data-hash="lien-he">Liên hệ</a>
+                    </nav>
+                </header>
+
+                <div class="landing-section is-active" data-landing="home" id="landing-section-home">
+                <section class="landing-hero">
+                    <h1>Chinh phục ngoại ngữ để mở rộng tương lai</h1>
+                    <p>
+                        FourGuys đồng hành cùng bạn trong lộ trình học tiếng Anh, Nhật, Hàn và Trung với
+                        chương trình thực tiễn, giảng viên tận tâm và môi trường học tập truyền cảm hứng.
+                    </p>
+                    <div class="landing-hero-actions">
+                        <button type="button" class="btn btn-primary" onclick="goLanding('contact', 'lien-he')">Tư vấn lộ trình</button>
+                        <button type="button" class="btn btn-secondary" onclick="goLanding('courses', 'khoa-hoc')">Xem khóa học</button>
+                    </div>
+                </section>
+
+                <section class="landing-blog-grid" id="landing-blog-grid">
+                    <article class="landing-blog-card loading">
+                        <span class="material-icons-outlined">hourglass_top</span>
+                        <h3>Đang tải bài viết...</h3>
+                        <p>Hệ thống đang lấy nội dung mới nhất từ trung tâm.</p>
+                    </article>
+                </section>
                 </div>
-                <div class="login-features">
-                    <div class="feature-item">
-                        <span class="material-icons-outlined">school</span>
-                        <span>Quản lý học viên & giảng viên</span>
+
+                <div class="landing-section" data-landing="about" id="landing-section-about">
+                    <div class="landing-subpage">
+                        <h2>Giới thiệu FourGuys</h2>
+                        <p>Trung tâm tập trung đào tạo ngoại ngữ thực tiễn, sĩ số tối ưu, đội ngũ giảng viên giàu kinh nghiệm.</p>
+                        <p>Bạn có thể chỉnh sửa nội dung này trong mã nguồn hoặc tích hợp API sau.</p>
                     </div>
-                    <div class="feature-item">
-                        <span class="material-icons-outlined">menu_book</span>
-                        <span>Quản lý khóa học & lớp học</span>
+                </div>
+
+                <div class="landing-section" data-landing="courses" id="landing-section-courses">
+                    <div class="landing-subpage">
+                        <h2>Chương trình đào tạo</h2>
+                        <p>Dưới đây là các khóa học hiện có tại FourGuys (lấy từ hệ thống).</p>
+                        <section class="landing-courses-grid" id="landing-courses-grid">
+                            <article class="landing-blog-card loading">
+                                <span class="material-icons-outlined">menu_book</span>
+                                <h3>Đang tải khóa học...</h3>
+                                <p>Hệ thống đang lấy danh sách khóa học mới nhất.</p>
+                            </article>
+                        </section>
                     </div>
-                    <div class="feature-item">
-                        <span class="material-icons-outlined">payments</span>
-                        <span>Quản lý học phí & thanh toán</span>
+                </div>
+
+                <div class="landing-section" data-landing="scholarships" id="landing-section-scholarships">
+                    <div class="landing-subpage">
+                        <h2>Học bổng</h2>
+                        <p>Danh sách học bổng mới nhất dành cho học viên tại FourGuys.</p>
+                        <section class="landing-scholarship-grid" id="landing-scholarship-grid">
+                            <article class="landing-blog-card loading">
+                                <span class="material-icons-outlined">hourglass_top</span>
+                                <h3>Đang tải học bổng...</h3>
+                                <p>Hệ thống đang lấy thông tin học bổng mới nhất.</p>
+                            </article>
+                        </section>
                     </div>
-                    <div class="feature-item">
-                        <span class="material-icons-outlined">analytics</span>
-                        <span>Thống kê & báo cáo chi tiết</span>
+                </div>
+
+                <div class="landing-section" data-landing="events" id="landing-section-events">
+                    <div class="landing-subpage">
+                        <h2>Sự kiện</h2>
+                        <p>Workshop, hội thảo, lễ tốt nghiệp, talkshow… (nội dung mẫu, có thể nối lịch từ hệ thống sau)</p>
+                    </div>
+                </div>
+
+                <div class="landing-section" data-landing="news" id="landing-section-news">
+                    <div class="landing-subpage">
+                        <h2>Tin tức</h2>
+                        <p>Các bài mới cũng hiển thị dưới dạng thẻ ở Trang chủ. Bấm <a href="javascript:void(0)" class="link-like" onclick="goLanding('home', 'trang-chu')">tại đây</a> để về mục blog.</p>
+                    </div>
+                </div>
+
+                <div class="landing-section" data-landing="contact" id="landing-section-contact">
+                    <div class="landing-subpage">
+                        <h2>Liên hệ / Đăng ký tư vấn</h2>
+                        <p>Hotline: cập nhật số tại trung tâm · Email: <span id="landing-demo-email">contact@fourguys.local</span></p>
+                        <p>Hoặc điền form đăng ký/đăng nhập ở panel bên phải màn hình.</p>
                     </div>
                 </div>
             </div>
@@ -174,6 +243,10 @@
                     <span class="material-icons-outlined">menu_book</span>
                     <span class="nav-text">Khóa học</span>
                 </a>
+                <a href="#" class="nav-item" data-page="scholarships" onclick="navigate('scholarships')" data-roles="admin,staff">
+                    <span class="material-icons-outlined">workspace_premium</span>
+                    <span class="nav-text">Học bổng</span>
+                </a>
                 <a href="#" class="nav-item" data-page="classes" onclick="navigate('classes')" data-roles="admin,staff,teacher,student">
                     <span class="material-icons-outlined">class</span>
                     <span class="nav-text">Lớp học</span>
@@ -287,10 +360,12 @@
     <script src="js/students.js"></script>
     <script src="js/teachers.js"></script>
     <script src="js/courses.js"></script>
+    <script src="js/scholarships.js"></script>
     <script src="js/classes.js"></script>
     <script src="js/enrollments.js"></script>
     <script src="js/payments.js"></script>
     <script src="js/attendance.js"></script>
+    <script src="js/landing.js"></script>
     <script src="js/teacher-attendance.js"></script>
     <script src="js/grades.js"></script>
     <script src="js/schedule.js"></script>

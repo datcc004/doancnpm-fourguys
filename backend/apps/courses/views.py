@@ -4,14 +4,15 @@ Views - API endpoints cho courses
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Count, Q, Avg
 from django.db import transaction
 
-from .models import Course, ClassRoom, Enrollment, TestScore
+from .models import Course, ClassRoom, Enrollment, TestScore, BlogPost, Scholarship
 from .serializers import (
     CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
-    EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer
+    EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer,
+    BlogPostSerializer, ScholarshipSerializer,
 )
 from apps.accounts.permissions import IsStaffOrAdmin
 
@@ -25,7 +26,11 @@ class CourseViewSet(viewsets.ModelViewSet):
     filterset_fields = ['language', 'level', 'is_active']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'cancel_enrollment']:
+        if self.action in ['list', 'retrieve']:
+            # Landing page cần hiển thị danh sách khóa học công khai.
+            return [AllowAny()]
+        if self.action in ['cancel_enrollment']:
+            # Chỉ học viên mới được hủy đăng ký.
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStaffOrAdmin()]
 
@@ -530,3 +535,50 @@ class TestScoreViewSet(viewsets.ModelViewSet):
             'test_names': list(test_names),
             'students': students_data,
         })
+
+
+class BlogPostViewSet(viewsets.ModelViewSet):
+    """API blog/tin tức cho landing page."""
+    serializer_class = BlogPostSerializer
+    search_fields = ['title', 'excerpt', 'content']
+    filterset_fields = ['is_published']
+    lookup_field = 'slug'
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def get_queryset(self):
+        qs = BlogPost.objects.all()
+        user = getattr(self.request, 'user', None)
+        if user and user.is_authenticated and getattr(user, 'role', None) in ['admin', 'staff']:
+            return qs
+        return qs.filter(is_published=True)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class ScholarshipViewSet(viewsets.ModelViewSet):
+    """API học bổng cho landing page và dashboard admin."""
+
+    serializer_class = ScholarshipSerializer
+    search_fields = ['title', 'short_description', 'content', 'eligibility']
+    filterset_fields = ['is_published']
+    lookup_field = 'slug'
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated(), IsStaffOrAdmin()]
+
+    def get_queryset(self):
+        qs = Scholarship.objects.all()
+        user = getattr(self.request, 'user', None)
+        if user and user.is_authenticated and getattr(user, 'role', None) in ['admin', 'staff']:
+            return qs
+        return qs.filter(is_published=True)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

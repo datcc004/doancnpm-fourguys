@@ -1,7 +1,8 @@
 """
-Models - Quản lý khóa học, lớp học, đăng ký, điểm Test
+Models - Quản lý khóa học, lớp học, đăng ký, điểm Test, blog, học bổng
 """
 from django.db import models
+from django.utils.text import slugify
 from apps.accounts.models import Teacher, Student
 
 
@@ -196,3 +197,75 @@ class TestScore(models.Model):
         if self.max_score and self.max_score > 0:
             return round(float(self.score) / float(self.max_score) * 10, 2)
         return 0
+
+
+class BlogPost(models.Model):
+    """Bài viết/blog hiển thị trên trang landing."""
+    title = models.CharField(max_length=255, verbose_name='Tiêu đề')
+    slug = models.SlugField(max_length=255, unique=True, verbose_name='Slug')
+    excerpt = models.CharField(max_length=400, blank=True, null=True, verbose_name='Tóm tắt')
+    content = models.TextField(verbose_name='Nội dung')
+    cover_image_url = models.URLField(max_length=500, blank=True, null=True, verbose_name='Ảnh bìa (URL)')
+    is_published = models.BooleanField(default=True, verbose_name='Công khai')
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name='Ngày xuất bản')
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Người tạo')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'blog_posts'
+        verbose_name = 'Bài viết'
+        verbose_name_plural = 'Bài viết'
+        ordering = ['-published_at', '-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title)[:220] or 'blog-post'
+            slug = base
+            suffix = 1
+            while BlogPost.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f'{base}-{suffix}'
+                suffix += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+
+class Scholarship(models.Model):
+    """Học bổng hiển thị công khai trên trang landing."""
+
+    title = models.CharField(max_length=255, verbose_name='Tên học bổng')
+    slug = models.SlugField(max_length=255, unique=True, verbose_name='Slug')
+    short_description = models.CharField(max_length=400, blank=True, null=True, verbose_name='Mô tả ngắn')
+    content = models.TextField(verbose_name='Nội dung chi tiết')
+    amount_text = models.CharField(max_length=120, blank=True, null=True, verbose_name='Giá trị học bổng')
+    eligibility = models.TextField(blank=True, null=True, verbose_name='Điều kiện áp dụng')
+    deadline = models.DateField(blank=True, null=True, verbose_name='Hạn nộp hồ sơ')
+    image_url = models.URLField(max_length=500, blank=True, null=True, verbose_name='Ảnh minh họa (URL)')
+    is_published = models.BooleanField(default=True, verbose_name='Công khai')
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name='Ngày xuất bản')
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Người tạo')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'scholarships'
+        verbose_name = 'Học bổng'
+        verbose_name_plural = 'Học bổng'
+        ordering = ['deadline', '-published_at', '-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title)[:220] or 'hoc-bong'
+            slug = base
+            suffix = 1
+            while Scholarship.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f'{base}-{suffix}'
+                suffix += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title

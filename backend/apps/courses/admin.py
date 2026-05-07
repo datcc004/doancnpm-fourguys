@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Course, ClassRoom, Enrollment, TestScore
+from .models import Course, ClassRoom, Enrollment, TestScore, BlogPost, Scholarship
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
@@ -24,3 +24,19 @@ class TestScoreAdmin(admin.ModelAdmin):
     list_display = ['student', 'classroom', 'test_name', 'test_type', 'score', 'max_score', 'test_date']
     list_filter = ['test_type', 'classroom']
     search_fields = ['student__user__first_name', 'student__user__last_name', 'test_name']
+
+
+@admin.register(BlogPost)
+class BlogPostAdmin(admin.ModelAdmin):
+    list_display = ['title', 'slug', 'is_published', 'published_at', 'created_at']
+    list_filter = ['is_published', 'published_at']
+    search_fields = ['title', 'excerpt', 'content']
+    prepopulated_fields = {'slug': ['title']}
+
+
+@admin.register(Scholarship)
+class ScholarshipAdmin(admin.ModelAdmin):
+    list_display = ['title', 'amount_text', 'deadline', 'is_published', 'published_at']
+    list_filter = ['is_published', 'published_at', 'deadline']
+    search_fields = ['title', 'short_description', 'content', 'eligibility']
+    prepopulated_fields = {'slug': ['title']}

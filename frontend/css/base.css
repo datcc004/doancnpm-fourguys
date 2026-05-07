@@ -55,6 +55,11 @@ h4 { font-size: 1.1rem; }
     display: flex;
 }
 
+/* Trang đăng nhập: full block để panel absolute đè lên nền (tránh flex của .page.active) */
+#login-page.page.active {
+    display: block;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;

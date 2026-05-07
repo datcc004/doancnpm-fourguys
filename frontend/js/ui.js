@@ -48,6 +48,7 @@ function navigate(page, params = null) {
         students: 'Quản lý Học viên',
         teachers: 'Quản lý Giảng viên',
         courses: 'Quản lý Khóa học',
+        scholarships: 'Quản lý Học bổng',
         classes: 'Quản lý Lớp học',
         enrollments: 'Đăng ký Lớp học',
         payments: 'Quản lý Học phí',
@@ -73,6 +74,7 @@ function navigate(page, params = null) {
             case 'students': renderStudents(window.navParams); break;
             case 'teachers': renderTeachers(window.navParams); break;
             case 'courses': renderCourses(window.navParams); break;
+            case 'scholarships': renderScholarships(window.navParams); break;
             case 'classes': renderClasses(window.navParams); break;
             case 'enrollments': renderEnrollments(window.navParams); break;
             case 'payments': renderPayments(window.navParams); break;

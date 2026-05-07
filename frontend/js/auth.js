@@ -150,6 +150,15 @@ function showLoginPage() {
     // Reset form
     document.getElementById('login-form').reset();
     document.getElementById('login-error').classList.add('hidden');
+    if (typeof loadLandingBlogs === 'function') {
+        loadLandingBlogs();
+    }
+    if (typeof loadLandingScholarships === 'function') {
+        loadLandingScholarships();
+    }
+    if (typeof syncLandingFromHash === 'function') {
+        syncLandingFromHash();
+    }
 }
 
 /**
