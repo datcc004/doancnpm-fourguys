@@ -19,7 +19,7 @@ from .models import Course, ClassRoom, Enrollment, TestScore, BlogPost, Scholars
 from .serializers import (
     CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
     EnrollmentSerializer, TestScoreSerializer, BulkTestScoreSerializer,
-    BlogPostSerializer, ScholarshipSerializer,
+    BlogPostSerializer, ScholarshipSerializer,)
 from .models import Course, ClassRoom, Enrollment, TestScore, CourseMaterial
 from .serializers import (
     CourseSerializer, ClassRoomSerializer, ClassRoomDetailSerializer,
