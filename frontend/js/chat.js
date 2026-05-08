@@ -68,11 +68,17 @@ function createChatWidget() {
         </button>
         <section id="chat-panel" class="chat-panel hidden" aria-label="Tin nhắn">
             <div class="chat-header">
-                <div>
-                    <h3>Tin nhắn</h3>
-                    <p id="chat-header-subtitle">Trao đổi giữa các actor</p>
+                <div class="chat-header-main">
+                    <span class="chat-header-icon">
+                        <span class="material-icons-outlined">forum</span>
+                    </span>
+                    <div>
+                        <h3>Tin nhắn</h3>
+                        <p id="chat-header-subtitle">Trao đổi nhanh trong hệ thống</p>
+                    </div>
                 </div>
                 <div class="chat-header-actions">
+                    <span class="chat-status-pill">Trực tuyến</span>
                     <button class="btn-icon" onclick="refreshChatWidget()" title="Tải lại">
                         <span class="material-icons-outlined">refresh</span>
                     </button>
@@ -83,18 +89,21 @@ function createChatWidget() {
             </div>
             <div class="chat-tabs">
                 <button id="chat-tab-conversations" class="chat-tab active" onclick="switchChatTab('conversations')">
-                    Hội thoại
+                    <span class="material-icons-outlined">forum</span>
+                    <span>Hội thoại</span>
                 </button>
                 <button id="chat-tab-users" class="chat-tab" onclick="switchChatTab('users')">
-                    Người dùng
+                    <span class="material-icons-outlined">group</span>
+                    <span>Người dùng</span>
                 </button>
                 <button id="chat-tab-ai" class="chat-tab" onclick="switchChatTab('ai')">
-                    AI
+                    <span class="material-icons-outlined">smart_toy</span>
+                    <span>AI</span>
                 </button>
             </div>
             <div class="chat-search">
                 <span class="material-icons-outlined">search</span>
-                <input id="chat-search-input" type="text" placeholder="Tìm người dùng..." oninput="handleChatSearch(event)">
+                <input id="chat-search-input" type="text" placeholder="Tìm người dùng hoặc hội thoại..." oninput="handleChatSearch(event)">
             </div>
             <div id="chat-list" class="chat-list"></div>
             <div id="chat-thread" class="chat-thread hidden">
@@ -409,7 +418,7 @@ function renderAiMessages(scrollToBottom = true) {
         messagesBox.innerHTML = `
             <div class="chat-empty chat-empty-thread">
                 <span class="material-icons-outlined">smart_toy</span>
-                <p>Hoi Gemini ve hoc tap, lich hoc hoac cach su dung he thong</p>
+                <p>Hỏi Gemini về học tập, lịch học hoặc cách sử dụng hệ thống</p>
             </div>
         `;
         return;
@@ -449,7 +458,7 @@ async function sendAiChatMessage(input, content) {
         created_at: new Date().toISOString(),
     };
     const pendingMessage = {
-        content: 'Dang tra loi...',
+        content: 'Đang trả lời...',
         is_mine: false,
         created_at: new Date().toISOString(),
     };
@@ -461,13 +470,13 @@ async function sendAiChatMessage(input, content) {
 
     try {
         const data = await API.post(CONFIG.ENDPOINTS.CHAT_AI, { message: content, history });
-        pendingMessage.content = data.reply || 'Xin loi, toi chua co cau tra loi.';
+        pendingMessage.content = data.reply || 'Xin lỗi, tôi chưa có câu trả lời.';
         pendingMessage.created_at = new Date().toISOString();
         renderAiMessages();
     } catch (error) {
         chatState.aiMessages = chatState.aiMessages.filter(message => message !== pendingMessage);
         renderAiMessages(false);
-        showToast(chatErrorMessage(error, 'Khong the hoi Gemini'), 'error');
+        showToast(chatErrorMessage(error, 'Không thể hỏi Gemini'), 'error');
     } finally {
         input.disabled = false;
         input.focus();
