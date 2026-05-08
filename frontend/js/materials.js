@@ -23,6 +23,9 @@ let materialsClassList = [];
 async function renderMaterials() {
     const content = document.getElementById('content-area');
     const isTeacherOrAdmin = hasRole('admin', 'staff', 'teacher');
+    const materialIntro = isTeacherOrAdmin
+        ? 'Quản lý, tải lên và chia sẻ tài liệu bài giảng theo từng lớp học.'
+        : 'Theo dõi và tải xuống tài liệu bài giảng từ các lớp bạn đang học.';
 
     // Load danh sách lớp
     try {
@@ -36,14 +39,36 @@ async function renderMaterials() {
         `<option value="${c.id}">${c.code} - ${c.name}</option>`
     ).join('');
 
-    let html = `<div class="page-enter">
-        <div class="toolbar">
-            <div class="toolbar-left">
-                <select class="filter-select" id="material-class-filter" onchange="loadMaterials()" style="min-width: 260px;">
+    let html = `<div class="page-enter materials-page">
+        <div class="materials-page-header">
+            <div class="materials-page-title">
+                <span class="materials-page-icon">
+                    <span class="material-icons-outlined">folder_copy</span>
+                </span>
+                <div>
+                    <h2>Quản lý tài liệu</h2>
+                    <p>${materialIntro}</p>
+                </div>
+            </div>
+            <div class="materials-page-summary">
+                <span class="material-icons-outlined">class</span>
+                <strong>${materialsClassList.length}</strong>
+                <span>lớp học</span>
+            </div>
+        </div>
+
+        <div class="toolbar materials-toolbar">
+            <div class="toolbar-left materials-filter-group">
+                <label class="materials-filter-field">
+                    <span>Lớp học</span>
+                    <select class="filter-select" id="material-class-filter" onchange="loadMaterials()">
                     <option value="">-- Chọn lớp học --</option>
                     ${classOptions}
-                </select>
-                <select class="filter-select" id="material-type-filter" onchange="loadMaterials()">
+                    </select>
+                </label>
+                <label class="materials-filter-field">
+                    <span>Loại tài liệu</span>
+                    <select class="filter-select" id="material-type-filter" onchange="loadMaterials()">
                     <option value="">Tất cả loại</option>
                     <option value="pdf">PDF</option>
                     <option value="doc">Word</option>
@@ -52,13 +77,14 @@ async function renderMaterials() {
                     <option value="image">Hình ảnh</option>
                     <option value="video">Video</option>
                     <option value="other">Khác</option>
-                </select>
+                    </select>
+                </label>
             </div>
             ${isTeacherOrAdmin ? `
             <div class="toolbar-right">
                 <button class="btn btn-primary" onclick="openUploadMaterialModal()" id="btn-upload-material">
                     <span class="material-icons-outlined">cloud_upload</span>
-                    <span>Tải lên tài liệu</span>
+                    <span>Tải lên</span>
                 </button>
             </div>` : ''}
         </div>

@@ -1141,3 +1141,136 @@ tr:last-child td {
     }
 }
 
+/* === Chat Widget Refresh === */
+.chat-panel {
+    width: min(420px, calc(100vw - 32px));
+    height: min(680px, calc(100vh - 112px));
+    border-radius: 18px;
+    border-color: rgba(148, 163, 184, 0.22);
+}
+
+.chat-header {
+    padding: 16px;
+    background: linear-gradient(135deg, #ffffff 0%, var(--primary-50) 100%);
+}
+
+.chat-header-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.chat-header-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background: var(--primary-600);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 10px 18px rgba(2, 132, 199, 0.18);
+}
+
+.chat-header-icon .material-icons-outlined {
+    font-size: 1.2rem;
+}
+
+.chat-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border-radius: var(--radius-full);
+    background: var(--success-50);
+    color: var(--success-600);
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.chat-status-pill::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-full);
+    background: var(--success-500);
+}
+
+.chat-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 38px;
+}
+
+.chat-tab .material-icons-outlined {
+    font-size: 1rem;
+}
+
+.chat-list {
+    padding: 8px;
+    background: var(--gray-50);
+}
+
+.chat-list-item {
+    margin-bottom: 6px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.chat-list-item:hover {
+    border-color: var(--primary-200);
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(14, 165, 233, 0.08);
+}
+
+.chat-list-item:last-child {
+    margin-bottom: 0;
+}
+
+.chat-thread-header {
+    height: 68px;
+    background: #ffffff;
+}
+
+.chat-messages {
+    padding: 18px 14px;
+    background: linear-gradient(180deg, var(--gray-50) 0%, #ffffff 100%);
+}
+
+.chat-message-bubble {
+    padding: 11px 13px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.chat-composer {
+    padding: 12px;
+    gap: 10px;
+}
+
+.chat-composer textarea {
+    border-radius: 14px;
+    background: var(--gray-50);
+}
+
+.chat-composer .btn {
+    border-radius: 14px;
+}
+
+@media (max-width: 480px) {
+    .chat-status-pill {
+        display: none;
+    }
+
+    .chat-tab {
+        gap: 4px;
+        font-size: 0.78rem;
+    }
+}
+
