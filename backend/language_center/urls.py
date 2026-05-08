@@ -11,11 +11,20 @@ from django.http import JsonResponse
 def api_root_view(request):
     return JsonResponse({
         "status": "success",
-        "message": "Language Center API is running successfully. Please use /api/ for endpoints."
+        "message": "Language Center API is running successfully.",
+        "endpoints": {
+            "auth": "/api/auth/",
+            "courses": "/api/courses/",
+            "payments": "/api/payments/",
+            "attendance": "/api/attendance/",
+            "chat": "/api/chat/",
+            "admin": "/admin/"
+        }
     })
 
 urlpatterns = [
     path('', api_root_view, name='api-root'),
+    path('api/', api_root_view),
     path('admin/', admin.site.urls),
     # API Routes
     path('api/auth/', include('apps.accounts.urls')),
